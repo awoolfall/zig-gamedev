@@ -145,6 +145,65 @@ pub const RENDER_TARGET_VIEW_DESC = extern struct {
     },
 };
 
+pub const DSV_DIMENSION = enum(UINT) {
+    UNKNOWN = 0,
+    TEXTURE1D = 1,
+    TEXTURE1DARRAY = 2,
+    TEXTURE2D = 3,
+    TEXTURE2DARRAY = 4,
+    TEXTURE2DMS = 5,
+    TEXTURE2DMSARRAY = 6,
+};
+
+pub const TEX1D_DSV = extern struct {
+    MipSlice: UINT,
+};
+
+pub const TEX1D_ARRAY_DSV = extern struct {
+    MipSlice: UINT,
+    FirstArraySlice: UINT,
+    ArraySize: UINT,
+};
+
+pub const TEX2D_DSV = extern struct {
+    MipSlice: UINT,
+};
+
+pub const TEX2D_ARRAY_DSV = extern struct {
+    MipSlice: UINT,
+    FirstArraySlice: UINT,
+    ArraySize: UINT,
+};
+
+pub const TEX2DMS_DSV = extern struct {
+    UnusedField_NothingToDefine: UINT,
+};
+
+pub const TEX2DMS_ARRAY_DSV = extern struct {
+    FirstArraySlice: UINT,
+    ArraySize: UINT,
+};
+
+pub const DSV_FLAGS = packed struct(UINT) {
+    READ_ONLY_DEPTH: bool = false,
+    READ_ONLY_STENCIL: bool = false,
+    __unused: u30 = 0,
+};
+
+pub const DEPTH_STENCIL_VIEW_DESC = extern struct {
+    Format: dxgi.FORMAT,
+    ViewDimension: DSV_DIMENSION,
+    Flags: DSV_FLAGS,
+    u: extern union {
+        Texture1D: TEX1D_DSV,
+        Texture1DArray: TEX1D_ARRAY_DSV,
+        Texture2D: TEX2D_DSV,
+        Texture2DArray: TEX2D_ARRAY_DSV,
+        Texture2DMS: TEX2DMS_DSV,
+        Texture2DMSArray: TEX2DMS_ARRAY_DSV,
+    },
+};
+
 pub const INPUT_CLASSIFICATION = enum(UINT) {
     INPUT_PER_VERTEX_DATA = 0,
     INPUT_PER_INSTANCE_DATA = 1,
@@ -1090,6 +1149,19 @@ pub const IDevice = extern struct {
                     ppRTView,
                 );
             }
+            pub inline fn CreateDepthStencilView(
+                self: *T,
+                pResource: ?*IResource,
+                pDesc: ?*const DEPTH_STENCIL_VIEW_DESC,
+                ppDepthStencilView: ?*?*IDepthStencilView,
+            ) HRESULT {
+                return @as(*const IDevice.VTable, @ptrCast(self.__v)).CreateDepthStencilView(
+                    @as(*IDevice, @ptrCast(self)),
+                    pResource,
+                    pDesc,
+                    ppDepthStencilView
+                );
+            }
             pub inline fn CreateInputLayout(
                 self: *T,
                 pInputElementDescs: ?[*]const INPUT_ELEMENT_DESC,
@@ -1200,7 +1272,12 @@ pub const IDevice = extern struct {
             ?*const RENDER_TARGET_VIEW_DESC,
             ?*?*IRenderTargetView,
         ) callconv(WINAPI) HRESULT,
-        CreateDepthStencilView: *anyopaque,
+        CreateDepthStencilView: *const fn (
+            *T,
+            ?*IResource,
+            ?*const DEPTH_STENCIL_VIEW_DESC,
+            ?*?*IDepthStencilView,
+        ) callconv(WINAPI) HRESULT,
         CreateInputLayout: *const fn (
             *T,
             ?[*]const INPUT_ELEMENT_DESC,
