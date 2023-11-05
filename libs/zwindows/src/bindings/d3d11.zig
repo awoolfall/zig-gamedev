@@ -204,6 +204,12 @@ pub const DEPTH_STENCIL_VIEW_DESC = extern struct {
     },
 };
 
+pub const CLEAR_FLAG = packed struct(UINT) {
+    CLEAR_DEPTH: bool = false,
+    CLEAR_STENCIL: bool = false,
+    __unused: u30 = 0,
+};
+
 pub const INPUT_CLASSIFICATION = enum(UINT) {
     INPUT_PER_VERTEX_DATA = 0,
     INPUT_PER_INSTANCE_DATA = 1,
@@ -883,6 +889,16 @@ pub const IDeviceContext = extern struct {
                 @as(*const IDeviceContext.VTable, @ptrCast(self.__v))
                     .ClearRenderTargetView(@as(*IDeviceContext, @ptrCast(self)), pRenderTargetView, ColorRGBA);
             }
+            pub inline fn ClearDepthStencilView(
+                self: *T,
+                pDepthStencilView: *IDepthStencilView,
+                ClearFlags: CLEAR_FLAG,
+                Depth: FLOAT,
+                Stencil: UINT8,
+            ) void {
+                @as(*const IDeviceContext.VTable, @ptrCast(self.__v))
+                    .ClearDepthStencilView(@as(*IDeviceContext, @ptrCast(self)), pDepthStencilView, ClearFlags, Depth, Stencil);
+            }
             pub inline fn Flush(self: *T) void {
                 @as(*const IDeviceContext.VTable, @ptrCast(self.__v)).Flush(@as(*IDeviceContext, @ptrCast(self)));
             }
@@ -1022,7 +1038,7 @@ pub const IDeviceContext = extern struct {
         ClearRenderTargetView: *const fn (*T, *IRenderTargetView, *const [4]FLOAT) callconv(WINAPI) void,
         ClearUnorderedAccessViewUint: *anyopaque,
         ClearUnorderedAccessViewFloat: *anyopaque,
-        ClearDepthStencilView: *anyopaque,
+        ClearDepthStencilView: *const fn (*T, *IDepthStencilView, CLEAR_FLAG, FLOAT, UINT8) callconv(WINAPI) void,
         GenerateMips: *anyopaque,
         SetResourceMinLOD: *anyopaque,
         GetResourceMinLOD: *anyopaque,
