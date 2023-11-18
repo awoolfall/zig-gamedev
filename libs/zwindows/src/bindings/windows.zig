@@ -151,6 +151,8 @@ pub extern "user32" fn GetKeyState(vKey: c_int) callconv(WINAPI) SHORT;
 
 pub extern "user32" fn LoadCursorA(hInstance: ?HINSTANCE, lpCursorName: LPCSTR) callconv(WINAPI) ?HCURSOR;
 
+pub extern "user32" fn ShowCursor(bShow: BOOL) callconv(WINAPI) INT;
+
 pub const TME_LEAVE = 0x00000002;
 
 pub const TRACKMOUSEEVENT = extern struct {
@@ -171,7 +173,11 @@ pub extern "user32" fn GetForegroundWindow() callconv(WINAPI) ?HWND;
 
 pub extern "user32" fn IsChild(hWndParent: ?HWND, hWnd: ?HWND) callconv(WINAPI) BOOL;
 
+pub extern "user32" fn SetCursorPos(X: INT, Y: INT) callconv(WINAPI) BOOL;
+
 pub extern "user32" fn GetCursorPos(point: *POINT) callconv(WINAPI) BOOL;
+
+pub extern "user32" fn ClipCursor(lpRect: ?*const RECT) callconv(WINAPI) BOOL;
 
 pub extern "user32" fn ScreenToClient(hWnd: ?HWND, lpPoint: *POINT) callconv(WINAPI) BOOL;
 
