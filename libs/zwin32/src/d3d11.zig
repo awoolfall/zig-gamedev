@@ -740,6 +740,16 @@ pub const IDeviceContext = extern struct {
                 @as(*const IDeviceContext.VTable, @ptrCast(self.__v))
                     .Draw(@as(*IDeviceContext, @ptrCast(self)), VertexCount, StartVertexLocation);
             }
+            pub inline fn DrawInstanced(
+                self: *T,
+                VertexCountPerInstance: UINT,
+                InstanceCount: UINT,
+                StartVertexLocation: UINT,
+                StartInstanceLocation: UINT
+            ) void {
+                @as(*const IDeviceContext.VTable, @ptrCast(self.__v))
+                    .DrawInstanced(@as(*IDeviceContext, @ptrCast(self)), VertexCountPerInstance, InstanceCount, StartVertexLocation, StartInstanceLocation);
+            }
             pub inline fn DrawIndexed(
                 self: *T,
                 IndexCount: UINT,
@@ -991,7 +1001,13 @@ pub const IDeviceContext = extern struct {
             UINT,
         ) callconv(WINAPI) void,
         DrawIndexedInstanced: *anyopaque,
-        DrawInstanced: *anyopaque,
+        DrawInstanced: *const fn (
+            *T,
+            UINT,
+            UINT,
+            UINT,
+            UINT
+        ) callconv(WINAPI) void,
         GSSetConstantBuffers: *anyopaque,
         GSSetShader: *anyopaque,
         IASetPrimitiveTopology: *const fn (*T, PRIMITIVE_TOPOLOGY) callconv(WINAPI) void,
