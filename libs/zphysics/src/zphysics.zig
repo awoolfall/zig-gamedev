@@ -2277,6 +2277,14 @@ pub const Character = opaque {
         c.JPC_Character_Destroy(@as(*c.JPC_Character, @ptrCast(character)));
     }
 
+    pub fn postSimulation(character: *Character, inMaxSeperationDistance: f32, inLockBodies: bool) void {
+        c.JPC_Character_PostSimulation(@as(*c.JPC_Character, @ptrCast(character)), inMaxSeperationDistance, inLockBodies);
+    }
+
+    pub fn isSupported(character: *Character) bool {
+        return c.JPC_Character_IsSupported(@as(*c.JPC_Character, @ptrCast(character)));
+    }
+
     pub fn addToPhysicsSystem(
         character: *Character,
         args: struct { activation: Activation = .activate, lock_bodies: bool = true }
