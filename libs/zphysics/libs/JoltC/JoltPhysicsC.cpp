@@ -3061,6 +3061,18 @@ JPC_Character_SetLinearVelocity(JPC_Character *in_character, const float in_line
     toJph(in_character)->SetLinearVelocity(loadVec3(in_linear_velocity));
 }
 //--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_Character_PostSimulation(JPC_Character *in_character, float inMaxSeperationDistance, bool inLockBodies)
+{
+    toJph(in_character)->PostSimulation(inMaxSeperationDistance, inLockBodies);
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API bool
+JPC_Character_IsSupported(JPC_Character *in_character)
+{
+    return toJph(in_character)->IsSupported();
+}
+//--------------------------------------------------------------------------------------------------
 //
 // JPC_CharacterVirtualSettings
 //

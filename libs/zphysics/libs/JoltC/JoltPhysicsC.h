@@ -2118,6 +2118,12 @@ JPC_Character_GetLinearVelocity(const JPC_Character *in_character, float out_lin
 
 JPC_API void
 JPC_Character_SetLinearVelocity(JPC_Character *in_character, const float in_linear_velocity[3]);
+
+JPC_API void
+JPC_Character_PostSimulation(JPC_Character *in_character, float inMaxSeperationDistance, bool inLockBodies);
+
+JPC_API bool
+JPC_Character_IsSupported(JPC_Character *in_character);
 //--------------------------------------------------------------------------------------------------
 //
 // JPC_CharacterVirtualSettings
