@@ -3168,6 +3168,12 @@ JPC_CharacterVirtual_GetGroundVelocity(const JPC_CharacterVirtual *in_character,
 }
 //--------------------------------------------------------------------------------------------------
 JPC_API void
+JPC_CharacterVirtual_GetGroundNormal(const JPC_CharacterVirtual *in_character, float out_ground_normal[3])
+{
+    storeVec3(out_ground_normal, toJph(in_character)->GetGroundNormal());
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
 JPC_CharacterVirtual_GetPosition(const JPC_CharacterVirtual *in_character, JPC_Real out_position[3])
 {
     storeRVec3(out_position, toJph(in_character)->GetPosition());
