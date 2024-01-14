@@ -477,6 +477,17 @@ typedef struct JPC_CharacterVirtualSettings
     float               penetration_recovery_speed;
 } JPC_CharacterVirtualSettings;
 
+// NOTE: Needs to be kept in sync
+typedef struct JPC_CharacterVirtualExtendedUpdateSettings
+{
+    alignas(16) float   mStickToFloorStepDown[4];
+    alignas(16) float   mWalkStairsStepUp[4];
+    float               mWalkStairsMinStepForward;
+    float               mWalkStairsStepForwardTest;
+    float               mWalkStairsCosAngleForwardContact;
+    alignas(16) float   mWalkStairsStepDownExtra[4];
+} JPC_CharacterVirtualExtendedUpdateSettings;
+
 // NOTE: Needs to be kept in sync with JPH::SubShapeIDCreator
 typedef struct JPC_SubShapeIDCreator
 {
@@ -2157,6 +2168,17 @@ JPC_CharacterVirtual_Update(JPC_CharacterVirtual *in_character,
                             const void *in_body_filter,
                             const void *in_shape_filter,
                             JPC_TempAllocator *in_temp_allocator);
+
+JPC_API void
+JPC_CharacterVirtual_ExtendedUpdate(JPC_CharacterVirtual *in_character,
+                                    float in_delta_time,
+                                    const float in_gravity[3],
+                                    const JPC_CharacterVirtualExtendedUpdateSettings *inSettings,
+                                    const void *in_broad_phase_layer_filter,
+                                    const void *in_object_layer_filter,
+                                    const void *in_body_filter,
+                                    const void *in_shape_filter,
+                                    JPC_TempAllocator *in_temp_allocator);
 
 JPC_API void
 JPC_CharacterVirtual_SetListener(JPC_CharacterVirtual *in_character, void *in_listener);

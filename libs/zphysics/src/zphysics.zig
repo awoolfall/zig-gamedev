@@ -2410,6 +2410,40 @@ pub const CharacterVirtual = opaque {
         );
     }
 
+    pub const ExtendedUpdateSettings = extern struct {
+        mStickToFloorStepDown: [4]f32 align(16) = [4]f32{0.0, -0.5, 0.0, 0.0},
+        mWalkStairsStepUp: [4]f32 align(16) = [4]f32{0.0, 0.4, 0.0, 0.0},
+        mWalkStairsMinStepForward: f32 = 0.02,
+        mWalkStairsStepForwardTest: f32 = 0.15,
+        mWalkStairsCosAngleForwardContact: f32 = std.math.cos(std.math.degreesToRadians(f32, 75.0)),
+        mWalkStairsStepDownExtra: [4]f32 align(16) = [4]f32{0.0, 0.0, 0.0, 0.0},
+    };
+
+    pub fn extendedUpdate(
+        character: *CharacterVirtual,
+        delta_time: f32,
+        gravity: [3]f32,
+        inSettings: ExtendedUpdateSettings,
+        args: struct {
+            broad_phase_layer_filter: ?*const BroadPhaseLayerFilter = null,
+            object_layer_filter: ?*const ObjectLayerFilter = null,
+            body_filter: ?*const BodyFilter = null,
+            shape_filter: ?*const ShapeFilter = null,
+        },
+    ) void {
+        c.JPC_CharacterVirtual_ExtendedUpdate(
+            @as(*c.JPC_CharacterVirtual, @ptrCast(character)),
+            delta_time,
+            &gravity,
+            @as(*const c.JPC_CharacterVirtualExtendedUpdateSettings, @ptrCast(&inSettings)),
+            args.broad_phase_layer_filter,
+            args.object_layer_filter,
+            args.body_filter,
+            args.shape_filter,
+            @as(*c.JPC_TempAllocator, @ptrCast(temp_allocator)),
+        );
+    }
+
     pub fn setListener(character: *CharacterVirtual, listener: ?*anyopaque) void {
         c.JPC_CharacterVirtual_SetListener(@as(*c.JPC_CharacterVirtual, @ptrCast(character)), listener);
     }
