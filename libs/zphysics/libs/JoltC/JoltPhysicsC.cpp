@@ -358,6 +358,9 @@ FN(toJph)(JPC_CharacterVirtualSettings *in) { assert(in); return reinterpret_cas
 FN(toJpc)(const JPH::CharacterVirtualSettings *in) { assert(in); return reinterpret_cast<const JPC_CharacterVirtualSettings *>(in); }
 FN(toJpc)(JPH::CharacterVirtualSettings *in) { assert(in); return reinterpret_cast<JPC_CharacterVirtualSettings *>(in); }
 
+FN(toJph)(const JPC_CharacterVirtualExtendedUpdateSettings *in) { assert(in); return reinterpret_cast<const JPH::CharacterVirtual::ExtendedUpdateSettings *>(in); }
+FN(toJph)(JPC_CharacterVirtualExtendedUpdateSettings *in) { assert(in); return reinterpret_cast<JPH::CharacterVirtual::ExtendedUpdateSettings *>(in); }
+
 #if JPC_DEBUG_RENDERER == 1
 FN(toJpc)(const JPH::BodyManager::DrawSettings *in) { assert(in); return reinterpret_cast<const JPC_BodyManager_DrawSettings *>(in); }
 FN(toJph)(const JPC_BodyManager_DrawSettings *in) { assert(in); return reinterpret_cast<const JPH::BodyManager::DrawSettings *>(in); }
@@ -2993,6 +2996,34 @@ JPC_CharacterVirtual_Update(JPC_CharacterVirtual *in_character,
         in_body_filter ? *static_cast<const JPH::BodyFilter *>(in_body_filter) : body_filter,
         in_shape_filter ? *static_cast<const JPH::ShapeFilter *>(in_shape_filter) : shape_filter,
         *reinterpret_cast<JPH::TempAllocator *>(in_temp_allocator));
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API void
+JPC_CharacterVirtual_ExtendedUpdate(JPC_CharacterVirtual *in_character,
+                                    float in_delta_time,
+                                    const float in_gravity[3],
+                                    const JPC_CharacterVirtualExtendedUpdateSettings *inSettings,
+                                    const void *in_broad_phase_layer_filter,
+                                    const void *in_object_layer_filter,
+                                    const void *in_body_filter,
+                                    const void *in_shape_filter,
+                                    JPC_TempAllocator *in_temp_allocator)
+{
+    const JPH::BroadPhaseLayerFilter broad_phase_layer_filter{};
+    const JPH::ObjectLayerFilter object_layer_filter{};
+    const JPH::BodyFilter body_filter{};
+    const JPH::ShapeFilter shape_filter{};
+    toJph(in_character)->ExtendedUpdate(
+            in_delta_time,
+            loadVec3(in_gravity),
+            *toJph(inSettings),
+            in_broad_phase_layer_filter ?
+            *static_cast<const JPH::BroadPhaseLayerFilter *>(in_broad_phase_layer_filter) : broad_phase_layer_filter,
+            in_object_layer_filter ?
+            *static_cast<const JPH::ObjectLayerFilter *>(in_object_layer_filter) : object_layer_filter,
+            in_body_filter ? *static_cast<const JPH::BodyFilter *>(in_body_filter) : body_filter,
+            in_shape_filter ? *static_cast<const JPH::ShapeFilter *>(in_shape_filter) : shape_filter,
+            *reinterpret_cast<JPH::TempAllocator *>(in_temp_allocator));
 }
 //--------------------------------------------------------------------------------------------------
 JPC_API JPC_CharacterGroundState
