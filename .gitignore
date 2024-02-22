@@ -2,6 +2,9 @@
 *
 !*/
 
+!.zigversion
+!.lfs-content-token
+
 !*.c
 !*.cpp
 !*.inl
@@ -45,3 +48,6 @@
 zig-cache
 zig-out
 backup
+
+# Ignore some special system files
+*.DS_Store

@@ -15,6 +15,7 @@ const DemoState = struct {
 
 fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*DemoState {
     const gctx = try zgpu.GraphicsContext.create(allocator, window, .{});
+    errdefer gctx.destroy(allocator);
 
     const success = zglfw.Gamepad.updateMappings(@embedFile("gamecontrollerdb.txt"));
     if (!success) {
@@ -29,7 +30,12 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*DemoState {
     _ = zgui.io.addFontFromFile(content_dir ++ "Roboto-Medium.ttf", math.floor(20.0 * scale_factor));
 
     // This needs to be called *after* adding your custom fonts.
-    zgui.backend.init(window, gctx.device, @intFromEnum(zgpu.GraphicsContext.swapchain_format));
+    zgui.backend.init(
+        window,
+        gctx.device,
+        @intFromEnum(zgpu.GraphicsContext.swapchain_format),
+        @intFromEnum(wgpu.TextureFormat.undef),
+    );
 
     // You can directly manipulate zgui.Style *before* `newFrame()` call.
     // Once frame is started (after `newFrame()` call) you have to use
@@ -230,10 +236,7 @@ fn draw(demo: *DemoState) void {
 }
 
 pub fn main() !void {
-    zglfw.init() catch {
-        std.log.err("Failed to initialize GLFW library.", .{});
-        return;
-    };
+    try zglfw.init();
     defer zglfw.terminate();
 
     // Change current working directory to where the executable is located.
@@ -243,10 +246,7 @@ pub fn main() !void {
         std.os.chdir(path) catch {};
     }
 
-    const window = zglfw.Window.create(1600, 775, window_title, null) catch {
-        std.log.err("Failed to create demo window.", .{});
-        return;
-    };
+    const window = try zglfw.Window.create(1600, 775, window_title, null);
     defer window.destroy();
     window.setSizeLimits(400, 400, -1, -1);
 
@@ -255,10 +255,7 @@ pub fn main() !void {
 
     const allocator = gpa.allocator();
 
-    const demo = create(allocator, window) catch {
-        std.log.err("Failed to initialize the demo.", .{});
-        return;
-    };
+    const demo = try create(allocator, window);
     defer destroy(allocator, demo);
 
     while (!window.shouldClose() and window.getKey(.escape) != .press) {

@@ -1,105 +1,99 @@
-**Please note that the project requires latest Zig compiler (master/nightly). It can be downloaded [here](https://ziglang.org/download/).**
-
-[Libraries](#libraries) - [Sample applications](#sample-applications-native-wgpu) - [Vision](#vision) - [Others using zig-gamedev](#others-using-zig-gamedev) - [Monthly reports](https://github.com/michal-z/zig-gamedev/wiki/Progress-Reports) - [Roadmap](https://github.com/michal-z/zig-gamedev/wiki/Roadmap)
+[Libraries](#libraries) - [Getting Started](#getting-started) - [Sample applications](#sample-applications-native-wgpu) - [Others using zig-gamedev](#others-using-zig-gamedev)
 
 # zig-gamedev project
 
-We build game development ecosystem for [Zig programming language](https://ziglang.org/), every day since July 2021. Please consider [supporting the project](https://github.com/sponsors/michal-z). We create:
+We build game development ecosystem for [Zig programming language](https://ziglang.org/), every day since July 2021. Please consider [supporting the project](https://github.com/sponsors/hazeycode). We create:
 
 * Cross-platform and composable [libraries](#libraries)
 * Cross-platform [sample applications](#sample-applications-native-wgpu)
 * DirectX 12 [sample applications](#sample-applications-directx-12)
-* Mini-games (in planning)
 
-To get started on Windows/Linux/macOS try out [physically based rendering (wgpu)](https://github.com/michal-z/zig-gamedev/tree/main/samples/physically_based_rendering_wgpu) sample:
-```sh
-git clone https://github.com/michal-z/zig-gamedev.git
-cd zig-gamedev
+### Vision
+* Very modular "toolbox of libraries", user can use only the components she needs
+* Just [Zig](https://ziglang.org) is required to build on Windows, macOS and Linux - no Visual Studio, Build Tools, Windows SDK, gcc, dev packages, system headers/libs, cmake, ninja, etc. is needed
+* Building is as easy as `zig build`
+* Libraries are written from scratch in Zig *or* provide Ziggified bindings for carefully selected C/C++ libraries
+* Uses native wgpu implementation ([Dawn](https://github.com/michal-z/dawn-bin)) or OpenGL for cross-platform graphics and DirectX 12 for low-level graphics on Windows
+
+
+## Getting Started
+
+Download the [latest archive](https://github.com/zig-gamedev/zig-gamedev/archive/refs/heads/main.zip) or clone/submodule with Git.
+
+Note: If using Git then you will need [Git LFS](https://git-lfs.github.com/) to be installed.
+
+### Get Zig
+
+Our [main](https://github.com/zig-gamedev/zig-gamedev/tree/main) branch is currenly tracking Zig **0.12.0-dev.2063+804cee3b9** as [nominated by the Mach engine project](https://machengine.org/about/nominated-zig) to maintain compatibilty for users of both projects.
+
+[zigup](https://github.com/marler8997/zigup) is recommended for managing compiler versions. Alternatively, you can download and install manually using the links below:
+
+| OS/Arch         | Download link               |
+| --------------- | --------------------------- |
+| Windows x86_64  | [zig-windows-x86_64-0.12.0-dev.2063+804cee3b9.zip](https://ziglang.org/builds/zig-windows-x86_64-0.12.0-dev.2063+804cee3b9.zip) |
+| Linux x86_64    | [zig-linux-x86_64-0.12.0-dev.2063+804cee3b9.tar.xz](https://ziglang.org/builds/zig-linux-x86_64-0.12.0-dev.2063+804cee3b9.tar.xz) |
+| macOS x86_64    | [zig-macos-x86_64-0.12.0-dev.2063+804cee3b9.tar.xz](https://ziglang.org/builds/zig-macos-x86_64-0.12.0-dev.2063+804cee3b9.tar.xz) |
+| macOS aarch64   | [zig-macos-aarch64-0.12.0-dev.2063+804cee3b9.tar.xz](https://ziglang.org/builds/zig-macos-aarch64-0.12.0-dev.2063+804cee3b9.tar.xz) |
+
+If you need to use a more recent version of Zig, you can try our [unstable](https://github.com/zig-gamedev/zig-gamedev/tree/unstable) branch. But this is not generally recommended.
+
+### Build and run the [Samples](#sample-applications-native-wgpu)
+
+To get started on Windows/Linux/macOS try out [physically based rendering (wgpu)](https://github.com/zig-gamedev/zig-gamedev/tree/main/samples/physically_based_rendering_wgpu) sample:
+```
 zig build physically_based_rendering_wgpu-run
 ```
-## Quick start (D3D12)
 
-To use zig-gamedev in your project copy or download zig-gamedev as a submodule, for example:
-
-```sh
-git submodule add https://github.com/michal-z/zig-gamedev.git libs/zig-gamedev
+To get a list of all available build steps:
+```
+zig build -l
 ```
 
-Currently, we have minimal low-level API which allows you to build the lib once (`package()`) and link it with many executables (`link()`).
+### Using the [Libraries](#Libraries)
 
-Include necessary libraries in `build.zig` like:
+Option to download packages using Zig Package Manager **coming soon!**
 
-```zig
-// Fetch the library
-const zwin32 = @import("src/deps/zig-gamedev/libs/zwin32/build.zig");
+Copy each library to a subdirectory in your project and add them as local package dependencies. For example:
 
-// Build it
-const zwin32_pkg = zwin32.package(b, target, optimize, .{});
+`build.zig.zon`
 
-// Link with your app
-zwin32_pkg.link(exe, .{ .d3d12 = true });
-```
+ ```zig
+ .{
+     .name = "MyGame",
+     .version = "0.0.0",
+     .dependencies = .{
+         .zglfw = .{ .path = "libs/zglfw" },
+         .system_sdk = .{ .path = "libs/system-sdk" },
+     },
+     .paths = "",
+ }
+ ```
 
-<details>
-<summary>Example build script:</summary>
+`build.zig`
 
-```zig
-const std = @import("std");
-const zwin32 = @import("libs/zig-gamedev/libs/zwin32/build.zig");
-const common = @import("libs/zig-gamedev/libs/common/build.zig");
-const zd3d12 = @import("libs/zig-gamedev/libs/zd3d12/build.zig");
+ ```zig
+ const zglfw = @import("zglfw");
 
-pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{});
+ pub fn build(b: *std.Build) void {
+      const zglfw_pkg = zglfw.package(b, target, optimize, .{});
 
-    const optimize = b.standardOptimizeOption(.{});
+      ...
 
-    const exe = b.addExecutable(.{
-        .name = "example",
-        .root_source_file = .{ .path = "src/main.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
+      zglfw_pkg.link(exe);
 
-    b.installArtifact(exe);
+      ...
+ }
+ ```
 
-    const run_cmd = b.addRunArtifact(exe);
+Refer to each lib's README.md for further usage intructions.
 
-    run_cmd.step.dependOn(b.getInstallStep());
-
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
-
-    const zwin32_pkg = zwin32.package(b, target, optimize, .{});
-    const zd3d12_pkg = zd3d12.package(b, target, optimize, .{
-        .options = .{
-            .enable_debug_layer = false,
-            .enable_gbv = false,
-            .enable_d2d = true,
-        },
-        .deps = .{ .zwin32 = zwin32_pkg.zwin32 },
-    });
-    const common_d2d_pkg = common.package(b, target, optimize, .{
-        .deps = .{ .zwin32 = zwin32_pkg.zwin32, .zd3d12 = zd3d12_pkg.zd3d12 },
-    });
-
-    zwin32_pkg.link(exe, .{ .d3d12 = true });
-    zd3d12_pkg.link(exe);
-    common_d2d_pkg.link(exe);
-
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
-}
-```
-</details>
 
 ## Libraries
 | Library                       | Latest version | Description                                                                                                                |
 |-------------------------------|----------------|----------------------------------------------------------------------------------------------------------------------------|
-| **[zphysics](libs/zphysics)** | 0.0.6          | Zig API and C API for [Jolt Physics](https://github.com/jrouwe/JoltPhysics)                                                |
+| **[zphysics](libs/zphysics)** | 0.0.6          | Zig build sys & bindings ontop of a [C API](https://github.com/zig-gamedev/zig-gamedev/tree/main/libs/zphysics/libs/JoltC) for [Jolt Physics](https://github.com/jrouwe/JoltPhysics)                                                |
 | **[zflecs](libs/zflecs)**     | 0.0.1          | Zig bindings for [flecs](https://github.com/SanderMertens/flecs) ECS                                                       |
-| **[zopengl](libs/zopengl)**   | 0.1.3          | OpenGL loader (supports 4.0 Core Profile and ES 2.0 Profile)                                                               |
+| **[zopengl](libs/zopengl)**   | 0.2.0          | OpenGL loader (supports 4.0 Core Profile and ES 2.0 Profile)                                                               |
 | **[zsdl](libs/zsdl)**         | 0.0.1          | Bindings for SDL2 (wip)                                                                                                    |
 | **[zgpu](libs/zgpu)**         | 0.9.1          | Small helper library built on top of native wgpu implementation ([Dawn](https://github.com/michal-z/dawn-bin))             |
 | **[zgui](libs/zgui)**         | 1.89.6         | Easy to use [dear imgui](https://github.com/ocornut/imgui) bindings (includes [ImPlot](https://github.com/epezent/implot)) |
@@ -109,22 +103,14 @@ pub fn build(b: *std.Build) void {
 | **[zmesh](libs/zmesh)**       | 0.9.0          | Loading, generating, processing and optimizing triangle meshes                                                             |
 | **[ztracy](libs/ztracy)**     | 0.10.0         | Support for CPU profiling with [Tracy](https://github.com/wolfpld/tracy)                                                   |
 | **[zpool](libs/zpool)**       | 0.9.0          | Generic pool & handle implementation                                                                                       |
-| **[zglfw](libs/zglfw)**       | 0.7.0          | Minimalistic [GLFW](https://github.com/glfw/glfw) bindings with no translate-c dependency                                  |
-| **[znoise](libs/znoise)**     | 0.1.0          | Zig bindings for [FastNoiseLite](https://github.com/Auburn/FastNoiseLite)                                                  |
+| **[zglfw](libs/zglfw)**       | 0.7.0          | Zig build sys & bindings for [GLFW](https://github.com/glfw/glfw)                                  |
+| **[znoise](libs/znoise)**     | 0.1.0          | Zig build sys & bindings for [FastNoiseLite](https://github.com/Auburn/FastNoiseLite)                                                  |
 | **[zjobs](libs/zjobs)**       | 0.1.0          | Generic job queue implementation                                                                                           |
-| **[zbullet](libs/zbullet)**   | 0.2.0          | Zig bindings and C API for [Bullet physics library](https://github.com/bulletphysics/bullet3)                              |
+| **[zbullet](libs/zbullet)**   | 0.2.0          | Zig build sys and bindings and C API for [Bullet physics library](https://github.com/bulletphysics/bullet3)                              |
 | **[zwin32](libs/zwin32)**     | 0.9.0          | Zig bindings for Win32 API (d3d12, d3d11, xaudio2, directml, wasapi and more)                                              |
 | **[zd3d12](libs/zd3d12)**     | 0.9.0          | Helper library for DirectX 12                                                                                              |
 | **[zxaudio2](libs/zxaudio2)** | 0.9.0          | Helper library for XAudio2                                                                                                 |
 | **[zpix](libs/zpix)**         | 0.9.0          | Support for GPU profiling with PIX for Windows                                                                             |
-
-## Vision
-* Very modular "toolbox of libraries", user can use only the components she needs
-* Works on Windows, macOS and Linux
-* Has zero dependency except [Zig compiler (master)](https://ziglang.org/download/) and `git` with [Git LFS](https://git-lfs.github.com/) - no Visual Studio, Build Tools, Windows SDK, gcc, dev packages, system headers/libs, cmake, ninja, etc. is needed
-* Building is as easy as running `zig build` (see: [Building](#building-sample-applications))
-* Libraries are written from scratch in Zig *or* provide Ziggified bindings for carefully selected C/C++ libraries
-* Uses native wgpu implementation ([Dawn](https://github.com/michal-z/dawn-bin)) or OpenGL for cross-platform graphics and DirectX 12 for low-level graphics on Windows
 
 ## Sample applications (native wgpu)
 
@@ -170,44 +156,12 @@ Some of the sample applications are listed below. More can be found in [samples]
 
    <a href="samples/mesh_shader_test"><img src="samples/mesh_shader_test/screenshot.png" alt="mesh shader test" height="200"></a>
 
+
 ## Others using zig-gamedev
 
+* [Tides of Revival](https://github.com/Srekel/tides-of-revival) - First-person, open-world, fantasy RPG being developed in the open
+* [Simulations](https://github.com/ckrowland/simulations) - GPU Accelerated agent-based modeling to visualize and simulate complex systems
+* [krateroid](https://github.com/kussakaa/krateroid) - 3D strategy game
+* [jok](https://github.com/jack-ji/jok) - A minimal 2D/3D game framework for Zig
 * [Aftersun](https://github.com/foxnne/aftersun) - Top-down 2D RPG
 * [Pixi](https://github.com/foxnne/pixi) - Pixel art editor made with Zig
-* [Simulations](https://github.com/ckrowland/simulations) - GPU Accelerated agent-based modeling to visualize and simulate complex systems
-* [elvengroin legacy](https://github.com/Srekel/elvengroin-legacy) - TBD
-* [jok](https://github.com/jack-ji/jok) - A minimal 2D/3D game framework for Zig
-
-## Building sample applications
-
-To build all sample applications (assuming `zig` is in the PATH and [Git LFS](https://git-lfs.github.com/) is installed):
-
-1. `git clone https://github.com/michal-z/zig-gamedev.git`
-1. `cd zig-gamedev`
-1. `zig build`
-
-Build artifacts will show up in `zig-out/bin` folder.
-
-`zig build <sample_name>` will build sample application named `<sample_name>`.
-
-`zig build <sample_name>-run` will build and run sample application named `<sample_name>`.
-
-To list all available sample names run `zig build --help` and navigate to `Steps` section.
-
-#### Build options
-
-Options for optimizations:
-* `-Doptimize=[Debug|ReleaseFast|ReleaseSafe|ReleaseSmall]` - enable optimizations
-
-Options for Windows applications:
-* `-Dzd3d12-enable-debug-layer=[bool]` - Direct3D 12, Direct2D, DXGI debug layers enabled
-* `-Dzd3d12-enable-gbv=[bool]` - Direct3D 12 GPU-Based Validation (GBV) enabled
-* `-Dzpix-enable=[bool]` - PIX markers and events enabled
-
-## GitHub Sponsors
-Thanks to all people who sponsor zig-gamedev project! In particular, these fine folks sponsor zig-gamedev for $25/month or more:
-* **[Derek Collison (derekcollison)](https://github.com/derekcollison)**
-* [Garett Bass (garettbass)](https://github.com/garettbass)
-* [Connor Rowland (ckrowland)](https://github.com/ckrowland)
-* Zig Software Foundation (ziglang)
-* Joran Dirk Greef (jorangreef)

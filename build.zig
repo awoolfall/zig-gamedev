@@ -1,16 +1,36 @@
 const builtin = @import("builtin");
 const std = @import("std");
 
-pub const min_zig_version = std.SemanticVersion{ .major = 0, .minor = 12, .patch = 0, .pre = "dev.1808" };
+pub const min_zig_version = std.SemanticVersion{ .major = 0, .minor = 12, .patch = 0, .pre = "dev.2063" };
 
 pub fn build(b: *std.Build) void {
-    //
-    // Options and system checks
-    //
     ensureZigVersion() catch return;
+
+    if (checkGitLfsContent() == false) {
+        ensureGit(b.allocator) catch return;
+        ensureGitLfs(b.allocator, "install") catch return;
+        ensureGitLfs(b.allocator, "pull") catch return;
+        if (checkGitLfsContent() == false) {
+            std.log.err("\n" ++
+                \\---------------------------------------------------------------------------
+                \\
+                \\Something went wrong, Git LFS content has not been downloaded.
+                \\
+                \\Please try to re-clone the repo and build again.
+                \\
+                \\---------------------------------------------------------------------------
+                \\
+            , .{});
+            return;
+        }
+    }
+
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+
     const options = Options{
-        .optimize = b.standardOptimizeOption(.{}),
-        .target = b.standardTargetOptions(.{}),
+        .optimize = optimize,
+        .target = target,
         .zd3d12_enable_debug_layer = b.option(
             bool,
             "zd3d12-enable-debug-layer",
@@ -21,48 +41,51 @@ pub fn build(b: *std.Build) void {
             "zd3d12-enable-gbv",
             "Enable DirectX 12 GPU-Based Validation (GBV)",
         ) orelse false,
-        .zpix_enable = b.option(bool, "zpix-enable", "Enable PIX for Windows profiler") orelse false,
+        .zpix_enable = b.option(
+            bool,
+            "zpix-enable",
+            "Enable PIX for Windows profiler",
+        ) orelse false,
     };
-    ensureTarget(options.target) catch return;
-    ensureGit(b.allocator) catch return;
-    ensureGitLfs(b.allocator, "install") catch return;
-    ensureGitLfs(b.allocator, "pull") catch return;
-    ensureGitLfsContent("/samples/triangle_wgpu/triangle_wgpu_content/Roboto-Medium.ttf") catch return;
 
     //
     // Packages
     //
     packagesCrossPlatform(b, options);
 
-    if (options.target.isWindows() and
-        (builtin.target.os.tag == .windows or builtin.target.os.tag == .linux))
-    {
-        packagesWindowsLinux(b, options);
+    if (target.result.os.tag == .windows) {
+        if (builtin.os.tag == .windows or builtin.os.tag == .linux) {
+            packagesWindowsLinux(b, options);
 
-        if (builtin.target.os.tag == .windows) {
-            packagesWindows(b, options);
+            if (builtin.os.tag == .windows) {
+                packagesWindows(b, options);
+            }
         }
     }
 
     //
     // Sample applications
     //
-    samplesCrossPlatform(b, options);
+    samples(b, options);
 
-    if (options.target.isWindows() and
-        (builtin.target.os.tag == .windows or builtin.target.os.tag == .linux))
-    {
-        samplesWindowsLinux(b, options);
+    if (target.result.os.tag == .windows) {
+        if (builtin.os.tag == .windows or builtin.os.tag == .linux) {
+            samplesWindowsLinux(b, options);
 
-        if (builtin.target.os.tag == .windows) {
-            samplesWindows(b, options);
+            if (builtin.os.tag == .windows) {
+                samplesWindows(b, options);
+            }
         }
     }
 
     //
     // Tests
     //
-    tests(b, options);
+    const test_step = b.step("test", "Run all tests");
+    tests(b, target, optimize, test_step);
+    if (builtin.os.tag == .windows) {
+        testsWindows(b, target, optimize, test_step);
+    }
 
     //
     // Benchmarks
@@ -97,14 +120,11 @@ fn packagesCrossPlatform(b: *std.Build, options: Options) void {
         .options = .{ .backend = .glfw_opengl3 },
     });
     zgpu_pkg = zgpu.package(b, target, optimize, .{
-        .options = .{ .uniforms_buffer_size = 4 * 1024 * 1024 },
-        .deps = .{ .zpool = zpool_pkg.zpool, .zglfw = zglfw_pkg.zglfw },
+        .options = .{},
+        .deps = .{ .zpool = zpool_pkg, .zglfw = zglfw_pkg },
     });
     ztracy_pkg = ztracy.package(b, target, optimize, .{
-        .options = .{
-            .enable_ztracy = !target.isDarwin(), // TODO: ztracy fails to compile on macOS.
-            .enable_fibers = !target.isDarwin(),
-        },
+        .options = .{ .enable_ztracy = true, .enable_fibers = true },
     });
     zphysics_pkg = zphysics.package(b, target, optimize, .{});
     zaudio_pkg = zaudio.package(b, target, optimize, .{});
@@ -154,40 +174,46 @@ fn packagesWindows(b: *std.Build, options: Options) void {
     });
 }
 
-fn samplesCrossPlatform(b: *std.Build, options: Options) void {
+fn samples(b: *std.Build, options: Options) void {
     const minimal_glfw_gl = @import("samples/minimal_glfw_gl/build.zig");
     const minimal_sdl_gl = @import("samples/minimal_sdl_gl/build.zig");
-    const triangle_wgpu = @import("samples/triangle_wgpu/build.zig");
-    const procedural_mesh_wgpu = @import("samples/procedural_mesh_wgpu/build.zig");
-    const textured_quad_wgpu = @import("samples/textured_quad_wgpu/build.zig");
-    const physically_based_rendering_wgpu = @import("samples/physically_based_rendering_wgpu/build.zig");
-    const bullet_physics_test_wgpu = @import("samples/bullet_physics_test_wgpu/build.zig");
-    const audio_experiments_wgpu = @import("samples/audio_experiments_wgpu/build.zig");
-    const gui_test_wgpu = @import("samples/gui_test_wgpu/build.zig");
-    const minimal_zgpu_zgui = @import("samples/minimal_zgpu_zgui/build.zig");
     const minimal_zgui_glfw_gl = @import("samples/minimal_zgui_glfw_gl/build.zig");
-    const instanced_pills_wgpu = @import("samples/instanced_pills_wgpu/build.zig");
-    const layers_wgpu = @import("samples/layers_wgpu/build.zig");
-    const gamepad_wgpu = @import("samples/gamepad_wgpu/build.zig");
-    const physics_test_wgpu = @import("samples/physics_test_wgpu/build.zig");
-    const monolith = @import("samples/monolith/build.zig");
 
     install(b, minimal_glfw_gl.build(b, options), "minimal_glfw_gl");
     install(b, minimal_sdl_gl.build(b, options), "minimal_sdl_gl");
-    install(b, triangle_wgpu.build(b, options), "triangle_wgpu");
-    install(b, textured_quad_wgpu.build(b, options), "textured_quad_wgpu");
-    install(b, gui_test_wgpu.build(b, options), "gui_test_wgpu");
-    install(b, minimal_zgpu_zgui.build(b, options), "minimal_zgpu_zgui");
     install(b, minimal_zgui_glfw_gl.build(b, options), "minimal_zgui_glfw_gl");
-    install(b, physically_based_rendering_wgpu.build(b, options), "physically_based_rendering_wgpu");
-    install(b, instanced_pills_wgpu.build(b, options), "instanced_pills_wgpu");
-    install(b, gamepad_wgpu.build(b, options), "gamepad_wgpu");
-    install(b, layers_wgpu.build(b, options), "layers_wgpu");
-    install(b, bullet_physics_test_wgpu.build(b, options), "bullet_physics_test_wgpu");
-    install(b, procedural_mesh_wgpu.build(b, options), "procedural_mesh_wgpu");
-    install(b, physics_test_wgpu.build(b, options), "physics_test_wgpu");
-    install(b, monolith.build(b, options), "monolith");
-    install(b, audio_experiments_wgpu.build(b, options), "audio_experiments_wgpu");
+
+    if (zgpu.checkTargetSupported(options.target)) {
+        const triangle_wgpu = @import("samples/triangle_wgpu/build.zig");
+        const procedural_mesh_wgpu = @import("samples/procedural_mesh_wgpu/build.zig");
+        const textured_quad_wgpu = @import("samples/textured_quad_wgpu/build.zig");
+        const physically_based_rendering_wgpu = @import("samples/physically_based_rendering_wgpu/build.zig");
+        const bullet_physics_test_wgpu = @import("samples/bullet_physics_test_wgpu/build.zig");
+        const audio_experiments_wgpu = @import("samples/audio_experiments_wgpu/build.zig");
+        const gui_test_wgpu = @import("samples/gui_test_wgpu/build.zig");
+        const minimal_zgpu_zgui = @import("samples/minimal_zgpu_zgui/build.zig");
+        const frame_pacing_wgpu = @import("samples/frame_pacing_wgpu/build.zig");
+        const instanced_pills_wgpu = @import("samples/instanced_pills_wgpu/build.zig");
+        const layers_wgpu = @import("samples/layers_wgpu/build.zig");
+        const gamepad_wgpu = @import("samples/gamepad_wgpu/build.zig");
+        const physics_test_wgpu = @import("samples/physics_test_wgpu/build.zig");
+        const monolith = @import("samples/monolith/build.zig");
+
+        install(b, triangle_wgpu.build(b, options), "triangle_wgpu");
+        install(b, textured_quad_wgpu.build(b, options), "textured_quad_wgpu");
+        install(b, gui_test_wgpu.build(b, options), "gui_test_wgpu");
+        install(b, minimal_zgpu_zgui.build(b, options), "minimal_zgpu_zgui");
+        install(b, frame_pacing_wgpu.build(b, options), "frame_pacing_wgpu");
+        install(b, physically_based_rendering_wgpu.build(b, options), "physically_based_rendering_wgpu");
+        install(b, instanced_pills_wgpu.build(b, options), "instanced_pills_wgpu");
+        install(b, gamepad_wgpu.build(b, options), "gamepad_wgpu");
+        install(b, layers_wgpu.build(b, options), "layers_wgpu");
+        install(b, bullet_physics_test_wgpu.build(b, options), "bullet_physics_test_wgpu");
+        install(b, procedural_mesh_wgpu.build(b, options), "procedural_mesh_wgpu");
+        install(b, physics_test_wgpu.build(b, options), "physics_test_wgpu");
+        install(b, monolith.build(b, options), "monolith");
+        install(b, audio_experiments_wgpu.build(b, options), "audio_experiments_wgpu");
+    }
 }
 
 fn samplesWindowsLinux(b: *std.Build, options: Options) void {
@@ -220,30 +246,55 @@ fn samplesWindows(b: *std.Build, options: Options) void {
     install(b, audio_experiments.build(b, options), "audio_experiments");
 }
 
-fn tests(b: *std.Build, options: Options) void {
-    const test_step = b.step("test", "Run all tests");
+fn tests(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    test_step: *std.Build.Step,
+) void {
+    test_step.dependOn(zaudio.runTests(b, optimize, target));
+    // TODO: Get zbullet tests working on Windows again
+    if (target.result.os.tag != .windows) {
+        test_step.dependOn(zbullet.runTests(b, optimize, target));
+    }
+    test_step.dependOn(zflecs.runTests(b, optimize, target));
+    test_step.dependOn(zglfw.runTests(b, optimize, target));
+    test_step.dependOn(zgpu.runTests(b, optimize, target));
+    test_step.dependOn(zgui.runTests(b, optimize, target));
+    test_step.dependOn(zjobs.runTests(b, optimize, target));
+    test_step.dependOn(zmath.runTests(b, optimize, target));
+    test_step.dependOn(zmesh.runTests(b, optimize, target));
+    test_step.dependOn(znoise.runTests(b, optimize, target));
+    test_step.dependOn(zopengl.runTests(b, optimize, target));
+    test_step.dependOn(zphysics.runTests(b, optimize, target));
+    test_step.dependOn(zpool.runTests(b, optimize, target));
 
-    test_step.dependOn(zmath.runTests(b, options.optimize, options.target));
-    test_step.dependOn(zmesh.runTests(b, options.optimize, options.target));
-    test_step.dependOn(zstbi.runTests(b, options.optimize, options.target));
-    test_step.dependOn(znoise.runTests(b, options.optimize, options.target));
-    test_step.dependOn(zglfw.runTests(b, options.optimize, options.target));
-    test_step.dependOn(zpool.runTests(b, options.optimize, options.target));
-    test_step.dependOn(zjobs.runTests(b, options.optimize, options.target));
-    test_step.dependOn(zaudio.runTests(b, options.optimize, options.target));
-    test_step.dependOn(zflecs.runTests(b, options.optimize, options.target));
-    test_step.dependOn(zphysics.runTests(b, options.optimize, options.target));
-    test_step.dependOn(zopengl.runTests(b, options.optimize, options.target));
+    // TODO(hazeycode): Fix tests linking SDL on Windows and macOS
+    switch (target.result.os.tag) {
+        .windows, .macos => {},
+        else => test_step.dependOn(zsdl.runTests(b, optimize, target)),
+    }
 
-    // TODO: zsdl tests not included in top-level tests until https://github.com/michal-z/zig-gamedev/issues/312 is resolved
-    // test_step.dependOn(zsdl.runTests(b, options.optimize, options.target, .sdl2));
-    // test_step.dependOn(zsdl.runTests(b, options.optimize, options.target, .sdl3));
+    test_step.dependOn(zstbi.runTests(b, optimize, target));
+    test_step.dependOn(ztracy.runTests(b, optimize, target));
+}
+
+fn testsWindows(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    test_step: *std.Build.Step,
+) void {
+    test_step.dependOn(zd3d12.runTests(b, optimize, target));
+    test_step.dependOn(zpix.runTests(b, optimize, target));
+    test_step.dependOn(zwin32.runTests(b, optimize, target));
+    test_step.dependOn(zxaudio2.runTests(b, optimize, target));
 }
 
 fn benchmarks(b: *std.Build, options: Options) void {
     const benchmark_step = b.step("benchmark", "Run all benchmarks");
 
-    benchmark_step.dependOn(zmath.runBenchmarks(b, options.target));
+    benchmark_step.dependOn(zmath.runBenchmarks(b, options.target, options.optimize));
 }
 
 pub var zmath_pkg: zmath.Package = undefined;
@@ -271,31 +322,31 @@ pub var common_pkg: common.Package = undefined;
 pub var common_d2d_pkg: common.Package = undefined;
 pub var zd3d12_d2d_pkg: zd3d12.Package = undefined;
 
-const zsdl = @import("libs/zsdl/build.zig");
-const zopengl = @import("libs/zopengl/build.zig");
-const zmath = @import("libs/zmath/build.zig");
-const zglfw = @import("libs/zglfw/build.zig");
-const zpool = @import("libs/zpool/build.zig");
-const zjobs = @import("libs/zjobs/build.zig");
-const zmesh = @import("libs/zmesh/build.zig");
-const znoise = @import("libs/znoise/build.zig");
-const zstbi = @import("libs/zstbi/build.zig");
-const zwin32 = @import("libs/zwin32/build.zig");
-const zd3d12 = @import("libs/zd3d12/build.zig");
-const zxaudio2 = @import("libs/zxaudio2/build.zig");
-const zpix = @import("libs/zpix/build.zig");
-const common = @import("libs/common/build.zig");
-const zbullet = @import("libs/zbullet/build.zig");
-const zgui = @import("libs/zgui/build.zig");
-const zgpu = @import("libs/zgpu/build.zig");
-const ztracy = @import("libs/ztracy/build.zig");
-const zphysics = @import("libs/zphysics/build.zig");
-const zaudio = @import("libs/zaudio/build.zig");
-const zflecs = @import("libs/zflecs/build.zig");
+const zsdl = @import("zsdl");
+const zopengl = @import("zopengl");
+const zmath = @import("zmath");
+const zglfw = @import("zglfw");
+const zpool = @import("zpool");
+const zjobs = @import("zjobs");
+const zmesh = @import("zmesh");
+const znoise = @import("znoise");
+const zstbi = @import("zstbi");
+const zwin32 = @import("zwin32");
+const zd3d12 = @import("zd3d12");
+const zxaudio2 = @import("zxaudio2");
+const zpix = @import("zpix");
+const common = @import("common");
+const zbullet = @import("zbullet");
+const zgui = @import("zgui");
+const zgpu = @import("zgpu");
+const ztracy = @import("ztracy");
+const zphysics = @import("zphysics");
+const zaudio = @import("zaudio");
+const zflecs = @import("zflecs");
 
 pub const Options = struct {
     optimize: std.builtin.Mode,
-    target: std.zig.CrossTarget,
+    target: std.Build.ResolvedTarget,
 
     zd3d12_enable_debug_layer: bool,
     zd3d12_enable_gbv: bool,
@@ -303,11 +354,15 @@ pub const Options = struct {
     zpix_enable: bool,
 };
 
-fn install(b: *std.Build, exe: *std.Build.CompileStep, comptime name: []const u8) void {
+fn install(b: *std.Build, exe: *std.Build.Step.Compile, comptime name: []const u8) void {
     // TODO: Problems with LTO on Windows.
-    exe.want_lto = false;
-    if (exe.optimize == .ReleaseFast)
-        exe.strip = true;
+    if (exe.rootModuleTarget().os.tag == .windows) {
+        exe.want_lto = false;
+    }
+
+    if (exe.root_module.optimize == .ReleaseFast) {
+        exe.root_module.strip = true;
+    }
 
     //comptime var desc_name: [256]u8 = [_]u8{0} ** 256;
     //comptime _ = std.mem.replace(u8, name, "", "", desc_name[0..]);
@@ -325,7 +380,7 @@ fn install(b: *std.Build, exe: *std.Build.CompileStep, comptime name: []const u8
 }
 
 fn ensureZigVersion() !void {
-    var installed_ver = @import("builtin").zig_version;
+    var installed_ver = builtin.zig_version;
     installed_ver.build = null;
 
     if (installed_ver.order(min_zig_version) == .lt) {
@@ -344,45 +399,6 @@ fn ensureZigVersion() !void {
             \\
         , .{ min_zig_version, installed_ver });
         return error.ZigIsTooOld;
-    }
-}
-
-fn ensureTarget(cross: std.zig.CrossTarget) !void {
-    const target = (std.zig.system.NativeTargetInfo.detect(cross) catch unreachable).target;
-
-    const supported = switch (target.os.tag) {
-        .windows => target.cpu.arch.isX86() and target.abi.isGnu(),
-        .linux => (target.cpu.arch.isX86() or target.cpu.arch.isAARCH64()) and target.abi.isGnu(),
-        .macos => blk: {
-            if (!target.cpu.arch.isX86() and !target.cpu.arch.isAARCH64()) break :blk false;
-
-            // If min. target macOS version is lesser than the min version we have available, then
-            // our Dawn binary is incompatible with the target.
-            if (target.os.version_range.semver.min.order(
-                .{ .major = 12, .minor = 0, .patch = 0 },
-            ) == .lt) break :blk false;
-            break :blk true;
-        },
-        else => false,
-    };
-    if (!supported) {
-        std.log.err("\n" ++
-            \\---------------------------------------------------------------------------
-            \\
-            \\Unsupported build target. Dawn/WebGPU binary for this target is not available.
-            \\
-            \\Following targets are supported:
-            \\
-            \\x86_64-windows-gnu
-            \\x86_64-linux-gnu
-            \\x86_64-macos.12.0.0-none
-            \\aarch64-linux-gnu
-            \\aarch64-macos.12.0.0-none
-            \\
-            \\---------------------------------------------------------------------------
-            \\
-        , .{});
-        return error.TargetNotSupported;
     }
 }
 
@@ -452,35 +468,20 @@ fn ensureGitLfs(allocator: std.mem.Allocator, cmd: []const u8) !void {
     }
 }
 
-fn ensureGitLfsContent(comptime file_path: []const u8) !void {
-    const printNoGitLfsContent = (struct {
-        fn impl() void {
-            std.log.err("\n" ++
-                \\---------------------------------------------------------------------------
-                \\
-                \\Something went wrong, Git LFS content has not been downloaded.
-                \\
-                \\Please try to re-clone the repo and build again.
-                \\
-                \\---------------------------------------------------------------------------
-                \\
-            , .{});
-        }
-    }).impl;
-    const file = std.fs.openFileAbsolute(thisDir() ++ file_path, .{}) catch {
-        printNoGitLfsContent();
-        return error.GitLfsNoContent;
+fn checkGitLfsContent() bool {
+    const file = std.fs.openFileAbsolute(thisDir() ++ "/.lfs-content-token", .{}) catch {
+        return false;
     };
     defer file.close();
-
-    const size = file.getEndPos() catch {
-        printNoGitLfsContent();
-        return error.GitLfsNoContent;
+    const expected_contents =
+        \\DO NOT EDIT OR DELETE
+        \\This file is used to check if Git LFS content has been downloaded
+    ;
+    var buf: [expected_contents.len]u8 = undefined;
+    _ = file.readAll(&buf) catch {
+        return false;
     };
-    if (size <= 1024) {
-        printNoGitLfsContent();
-        return error.GitLfsNoContent;
-    }
+    return std.mem.eql(u8, expected_contents, &buf);
 }
 
 inline fn thisDir() []const u8 {

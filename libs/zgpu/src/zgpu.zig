@@ -1,4 +1,3 @@
-pub const version = @import("std").SemanticVersion{ .major = 0, .minor = 9, .patch = 1 };
 //--------------------------------------------------------------------------------------------------
 // zgpu is a small helper library built on top of native wgpu implementation (Dawn).
 //
@@ -14,8 +13,13 @@ const wgsl = @import("common_wgsl.zig");
 const zgpu_options = @import("zgpu_options");
 pub const wgpu = @import("wgpu.zig");
 
+test {
+    _ = wgpu;
+}
+
 pub const GraphicsContextOptions = struct {
     present_mode: wgpu.PresentMode = .fifo,
+    required_features: []const wgpu.FeatureName = &[_]wgpu.FeatureName{},
 };
 
 pub const GraphicsContext = struct {
@@ -80,7 +84,6 @@ pub const GraphicsContext = struct {
                     \\---------------------------------------------------------------------------
                     \\
                     \\This program requires:
-                    \\
                     \\  * Vulkan graphics driver on Linux (OpenGL is NOT supported)
                     \\
                     \\Please install latest supported driver and try again.
@@ -166,7 +169,7 @@ pub const GraphicsContext = struct {
             }).callback;
 
             const toggles = [_][*:0]const u8{"skip_validation"};
-            const dawn_toggles = wgpu.DawnTogglesDeviceDescriptor{
+            const dawn_toggles = wgpu.DawnTogglesDescriptor{
                 .chain = .{ .next = null, .struct_type = .dawn_toggles_descriptor },
                 .enabled_toggles_count = toggles.len,
                 .enabled_toggles = &toggles,
@@ -179,6 +182,8 @@ pub const GraphicsContext = struct {
                         @ptrCast(&dawn_toggles)
                     else
                         null,
+                    .required_features_count = options.required_features.len,
+                    .required_features = options.required_features.ptr,
                 },
                 callback,
                 @ptrCast(&response),
@@ -1227,7 +1232,7 @@ pub fn createWgslShaderModule(
     source: [*:0]const u8,
     label: ?[*:0]const u8,
 ) wgpu.ShaderModule {
-    const wgsl_desc = wgpu.ShaderModuleWgslDescriptor{
+    const wgsl_desc = wgpu.ShaderModuleWGSLDescriptor{
         .chain = .{ .next = null, .struct_type = .shader_module_wgsl_descriptor },
         .code = source,
     };

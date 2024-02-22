@@ -1,14 +1,17 @@
-# zsdl - bindings for SDL2 (wip)
+# zsdl v0.0.1 - bindings for SDL2 (wip)
 
 ## Getting started
 
-Copy `zsdl` folder to a `libs` subdirectory of the root of your project.
+Copy `zsdl` folder to a `libs` subdirectory of the root of your project and add the following to your `build.zig.zon` .dependencies:
+```zig
+    .zsdl = .{ .path = "libs/zsdl" },
+```
 
 Then in your `build.zig` add:
 
 ```zig
 const std = @import("std");
-const zsdl = @import("libs/zsdl/build.zig");
+const zsdl = @import("zsdl");
 
 pub fn build(b: *std.Build) void {
     ...

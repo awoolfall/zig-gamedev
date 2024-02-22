@@ -4,12 +4,14 @@ const testing = std.testing;
 
 const options = @import("zopengl_options");
 
-const bindings = @import("bindings.zig");
+pub const bindings = @import("bindings.zig");
+pub const wrapper = @import("wrapper.zig").Wrap(bindings);
 
-pub usingnamespace switch (options.api) {
-    .raw_bindings => bindings,
-    .wrapper => @import("wrapper.zig"),
-};
+test {
+    @setEvalBranchQuota(100_000);
+    _ = testing.refAllDeclsRecursive(@This());
+}
+
 //--------------------------------------------------------------------------------------------------
 //
 // Functions for loading OpenGL function pointers
@@ -1268,9 +1270,4 @@ comptime {
     @export(bindings.vertexAttribP3uiv, .{ .name = "glVertexAttribP3uiv", .linkage = linkage });
     @export(bindings.vertexAttribP4ui, .{ .name = "glVertexAttribP4ui", .linkage = linkage });
     @export(bindings.vertexAttribP4uiv, .{ .name = "glVertexAttribP4uiv", .linkage = linkage });
-}
-
-test {
-    @setEvalBranchQuota(100_000);
-    _ = testing.refAllDecls(@This());
 }

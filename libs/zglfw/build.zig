@@ -2,32 +2,40 @@ const std = @import("std");
 
 pub const Package = struct {
     zglfw: *std.Build.Module,
-    zglfw_c_cpp: *std.Build.CompileStep,
+    zglfw_c_cpp: *std.Build.Step.Compile,
 
-    pub fn link(pkg: Package, exe: *std.Build.CompileStep) void {
-        exe.addModule("zglfw", pkg.zglfw);
+    pub fn link(pkg: Package, exe: *std.Build.Step.Compile) void {
+        exe.root_module.addImport("zglfw", pkg.zglfw);
 
-        const host = (std.zig.system.NativeTargetInfo.detect(exe.target) catch unreachable).target;
+        const b = exe.step.owner;
+        const target = exe.rootModuleTarget();
 
-        switch (host.os.tag) {
+        const system_sdk = b.dependency("system_sdk", .{});
+
+        switch (target.os.tag) {
             .windows => {},
             .macos => {
-                exe.addLibraryPath(.{ .path = thisDir() ++ "/../system-sdk/macos12/usr/lib" });
+                exe.addLibraryPath(.{ .path = system_sdk.path("macos12/usr/lib").getPath(b) });
             },
-            else => {
-                // We assume Linux (X11)
-                if (host.cpu.arch.isX86()) {
-                    exe.addLibraryPath(.{ .path = thisDir() ++ "/../system-sdk/linux/lib/x86_64-linux-gnu" });
+            .linux => {
+                if (target.cpu.arch.isX86()) {
+                    exe.addLibraryPath(.{ .path = system_sdk.path("linux/lib/x86_64-linux-gnu").getPath(b) });
                 } else {
-                    exe.addLibraryPath(.{ .path = thisDir() ++ "/../system-sdk/linux/lib/aarch64-linux-gnu" });
+                    exe.addLibraryPath(.{ .path = system_sdk.path("linux/lib/aarch64-linux-gnu").getPath(b) });
                 }
             },
+            else => {},
         }
 
-        if (pkg.zglfw_c_cpp.linkage) |linkage| {
-            if (exe.target.isWindows() and linkage == .dynamic) {
-                exe.defineCMacro("GLFW_DLL", null);
-            }
+        switch (target.os.tag) {
+            .windows => {
+                if (pkg.zglfw_c_cpp.linkage) |linkage| {
+                    if (linkage == .dynamic) {
+                        exe.defineCMacro("GLFW_DLL", null);
+                    }
+                }
+            },
+            else => {},
         }
 
         exe.linkLibrary(pkg.zglfw_c_cpp);
@@ -40,7 +48,7 @@ pub const Options = struct {
 
 pub fn package(
     b: *std.Build,
-    target: std.zig.CrossTarget,
+    target: std.Build.ResolvedTarget,
     optimize: std.builtin.Mode,
     args: struct {
         options: Options = .{},
@@ -50,7 +58,7 @@ pub fn package(
     step.addOption(bool, "shared", args.options.shared);
 
     const zglfw = b.addModule("zglfw", .{
-        .source_file = .{ .path = thisDir() ++ "/src/zglfw.zig" },
+        .root_source_file = .{ .path = thisDir() ++ "/src/zglfw.zig" },
     });
 
     const zglfw_c_cpp = if (args.options.shared) blk: {
@@ -60,7 +68,7 @@ pub fn package(
             .optimize = optimize,
         });
 
-        if (target.isWindows()) {
+        if (target.result.os.tag == .windows) {
             lib.defineCMacro("_GLFW_BUILD_DLL", null);
         }
 
@@ -74,15 +82,15 @@ pub fn package(
     zglfw_c_cpp.addIncludePath(.{ .path = thisDir() ++ "/libs/glfw/include" });
     zglfw_c_cpp.linkLibC();
 
-    const host = (std.zig.system.NativeTargetInfo.detect(zglfw_c_cpp.target) catch unreachable).target;
+    const system_sdk = b.dependency("system_sdk", .{});
 
     const src_dir = thisDir() ++ "/libs/glfw/src/";
 
-    switch (host.os.tag) {
+    switch (target.result.os.tag) {
         .windows => {
-            zglfw_c_cpp.linkSystemLibraryName("gdi32");
-            zglfw_c_cpp.linkSystemLibraryName("user32");
-            zglfw_c_cpp.linkSystemLibraryName("shell32");
+            zglfw_c_cpp.linkSystemLibrary("gdi32");
+            zglfw_c_cpp.linkSystemLibrary("user32");
+            zglfw_c_cpp.linkSystemLibrary("shell32");
             zglfw_c_cpp.addCSourceFiles(.{
                 .files = &.{
                     src_dir ++ "monitor.c",
@@ -106,11 +114,13 @@ pub fn package(
         },
         .macos => {
             zglfw_c_cpp.addFrameworkPath(
-                .{ .path = thisDir() ++ "/../system-sdk/macos12/System/Library/Frameworks" },
+                .{ .path = system_sdk.path("macos12/System/Library/Frameworks").getPath(b) },
             );
-            zglfw_c_cpp.addSystemIncludePath(.{ .path = thisDir() ++ "/../system-sdk/macos12/usr/include" });
-            zglfw_c_cpp.addLibraryPath(.{ .path = thisDir() ++ "/../system-sdk/macos12/usr/lib" });
-            zglfw_c_cpp.linkSystemLibraryName("objc");
+            zglfw_c_cpp.addSystemIncludePath(.{
+                .path = system_sdk.path("macos12/usr/include").getPath(b),
+            });
+            zglfw_c_cpp.addLibraryPath(.{ .path = system_sdk.path("macos12/usr/lib").getPath(b) });
+            zglfw_c_cpp.linkSystemLibrary("objc");
             zglfw_c_cpp.linkFramework("IOKit");
             zglfw_c_cpp.linkFramework("CoreFoundation");
             zglfw_c_cpp.linkFramework("Metal");
@@ -139,15 +149,20 @@ pub fn package(
                 .flags = &.{"-D_GLFW_COCOA"},
             });
         },
-        else => {
-            // We assume Linux (X11)
-            zglfw_c_cpp.addSystemIncludePath(.{ .path = thisDir() ++ "/../system-sdk/linux/include" });
-            if (host.cpu.arch.isX86()) {
-                zglfw_c_cpp.addLibraryPath(.{ .path = thisDir() ++ "/../system-sdk/linux/lib/x86_64-linux-gnu" });
+        .linux => {
+            zglfw_c_cpp.addSystemIncludePath(.{
+                .path = system_sdk.path("linux/include").getPath(b),
+            });
+            if (target.result.cpu.arch.isX86()) {
+                zglfw_c_cpp.addLibraryPath(.{
+                    .path = system_sdk.path("linux/lib/x86_64-linux-gnu").getPath(b),
+                });
             } else {
-                zglfw_c_cpp.addLibraryPath(.{ .path = thisDir() ++ "/../system-sdk/linux/lib/aarch64-linux-gnu" });
+                zglfw_c_cpp.addLibraryPath(.{
+                    .path = system_sdk.path("linux/lib/aarch64-linux-gnu").getPath(b),
+                });
             }
-            zglfw_c_cpp.linkSystemLibraryName("X11");
+            zglfw_c_cpp.linkSystemLibrary("X11");
             zglfw_c_cpp.addCSourceFiles(.{
                 .files = &.{
                     src_dir ++ "monitor.c",
@@ -170,6 +185,7 @@ pub fn package(
                 .flags = &.{"-D_GLFW_X11"},
             });
         },
+        else => {},
     }
 
     return .{
@@ -192,7 +208,7 @@ pub fn build(b: *std.Build) void {
 pub fn runTests(
     b: *std.Build,
     optimize: std.builtin.Mode,
-    target: std.zig.CrossTarget,
+    target: std.Build.ResolvedTarget,
 ) *std.Build.Step {
     const tests = b.addTest(.{
         .name = "zglfw-tests",

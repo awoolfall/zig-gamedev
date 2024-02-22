@@ -2,22 +2,22 @@ const std = @import("std");
 
 pub const Package = struct {
     zbullet: *std.Build.Module,
-    zbullet_c_cpp: *std.Build.CompileStep,
+    zbullet_c_cpp: *std.Build.Step.Compile,
 
-    pub fn link(pkg: Package, exe: *std.Build.CompileStep) void {
+    pub fn link(pkg: Package, exe: *std.Build.Step.Compile) void {
         exe.linkLibrary(pkg.zbullet_c_cpp);
-        exe.addModule("zbullet", pkg.zbullet);
+        exe.root_module.addImport("zbullet", pkg.zbullet);
     }
 };
 
 pub fn package(
     b: *std.Build,
-    target: std.zig.CrossTarget,
+    target: std.Build.ResolvedTarget,
     optimize: std.builtin.Mode,
     _: struct {},
 ) Package {
-    const zbullet = b.createModule(.{
-        .source_file = .{ .path = thisDir() ++ "/src/zbullet.zig" },
+    const zbullet = b.addModule("zbullet", .{
+        .root_source_file = .{ .path = thisDir() ++ "/src/zbullet.zig" },
     });
 
     const zbullet_c_cpp = b.addStaticLibrary(.{
@@ -54,7 +54,36 @@ pub fn package(
     };
 }
 
-pub fn build(_: *std.Build) void {}
+pub fn build(b: *std.Build) void {
+    const optimize = b.standardOptimizeOption(.{});
+    const target = b.standardTargetOptions(.{});
+
+    const test_step = b.step("test", "Run zbullet tests");
+    test_step.dependOn(runTests(b, optimize, target));
+
+    _ = package(b, target, optimize, .{});
+}
+
+pub fn runTests(
+    b: *std.Build,
+    optimize: std.builtin.Mode,
+    target: std.Build.ResolvedTarget,
+) *std.Build.Step {
+    const zmath = b.dependency("zmath", .{});
+
+    var tests = b.addTest(.{
+        .name = "zbullet-tests",
+        .root_source_file = .{ .path = thisDir() ++ "/src/zbullet.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+    tests.root_module.addImport("zmath", zmath.module("zmath"));
+
+    const pkg = package(b, target, optimize, .{});
+    pkg.link(tests);
+
+    return &b.addRunArtifact(tests).step;
+}
 
 inline fn thisDir() []const u8 {
     return comptime std.fs.path.dirname(@src().file) orelse ".";
