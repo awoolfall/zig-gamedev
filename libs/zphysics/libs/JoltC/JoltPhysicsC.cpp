@@ -3170,7 +3170,7 @@ JPC_CharacterVirtual_ExtendedUpdate(JPC_CharacterVirtual *in_character,
 }
 //--------------------------------------------------------------------------------------------------
 JPC_API JPC_CharacterGroundState
-JPC_CharacterVirtual_GetGroundState(JPC_CharacterVirtual *in_character)
+JPC_CharacterVirtual_GetGroundState(const JPC_CharacterVirtual *in_character)
 {
     return toJpc(toJph(in_character)->GetGroundState());
 }
@@ -3202,6 +3202,14 @@ JPC_API void
 JPC_CharacterVirtual_GetGroundNormal(const JPC_CharacterVirtual *in_character, float out_ground_normal[3])
 {
     storeVec3(out_ground_normal, toJph(in_character)->GetGroundNormal());
+}
+//--------------------------------------------------------------------------------------------------
+JPC_API bool
+JPC_CharacterVirtual_GetGroundBodyID(const JPC_CharacterVirtual *in_character, JPC_BodyID *body_id)
+{
+    auto ground_id = toJph(in_character)->GetGroundBodyID();
+    *body_id = toJpc(ground_id);
+    return !ground_id.IsInvalid();
 }
 //--------------------------------------------------------------------------------------------------
 JPC_API void

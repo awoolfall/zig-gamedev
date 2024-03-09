@@ -2460,8 +2460,16 @@ pub const CharacterVirtual = opaque {
         c.JPC_CharacterVirtual_GetGroundNormal(@as(*const c.JPC_CharacterVirtual, @ptrCast(character)), &normal);
         return normal;
     }
-    pub fn getGroundState(character: *CharacterVirtual) CharacterGroundState {
-        return @enumFromInt(c.JPC_CharacterVirtual_GetGroundState(@as(*c.JPC_CharacterVirtual, @ptrCast(character))));
+    pub fn getGroundState(character: *const CharacterVirtual) CharacterGroundState {
+        return @enumFromInt(c.JPC_CharacterVirtual_GetGroundState(@as(*const c.JPC_CharacterVirtual, @ptrCast(character))));
+    }
+    pub fn getGroundBodyID(character: *const CharacterVirtual) ?BodyId {
+        var body_id: BodyId = undefined;
+        if (c.JPC_CharacterVirtual_GetGroundBodyID(@as(*const c.JPC_CharacterVirtual, @ptrCast(character)), &body_id)) {
+            return body_id;
+        } else {
+            return null;
+        }
     }
 
     pub fn getPosition(character: *const CharacterVirtual) [3]Real {

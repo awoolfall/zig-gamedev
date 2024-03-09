@@ -2193,7 +2193,10 @@ JPC_API void
 JPC_CharacterVirtual_GetGroundNormal(const JPC_CharacterVirtual *in_character, float out_ground_normal[3]);
 
 JPC_API JPC_CharacterGroundState
-JPC_CharacterVirtual_GetGroundState(JPC_CharacterVirtual *in_character);
+JPC_CharacterVirtual_GetGroundState(const JPC_CharacterVirtual *in_character);
+
+JPC_API bool
+JPC_CharacterVirtual_GetGroundBodyID(const JPC_CharacterVirtual *in_character, JPC_BodyID *body_id);
 
 JPC_API void
 JPC_CharacterVirtual_GetPosition(const JPC_CharacterVirtual *in_character, JPC_Real out_position[3]);
