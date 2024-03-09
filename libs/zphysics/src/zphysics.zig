@@ -338,7 +338,7 @@ pub const CharacterContactListener = extern struct {
             pub inline fn OnContactValidate(
                 self: *const T,
                 character: *const CharacterVirtual,
-                body: *const Body,
+                body: *const BodyId,
                 sub_shape_id: *const SubShapeId,
             ) bool {
                 return @as(*const CharacterContactListener.VTable, @ptrCast(self.__v)).OnContactValidate(
@@ -351,7 +351,7 @@ pub const CharacterContactListener = extern struct {
             pub inline fn OnContactAdded(
                 self: *const T,
                 character: *const CharacterVirtual,
-                body: *const Body,
+                body: *const BodyId,
                 sub_shape_id: *const SubShapeId,
                 contact_position: *const [3]Real,
                 contact_normal: *const [3]f32,
@@ -370,7 +370,7 @@ pub const CharacterContactListener = extern struct {
             pub inline fn OnContactSolve(
                 self: *const T,
                 character: *const CharacterVirtual,
-                body: *const Body,
+                body: *const BodyId,
                 sub_shape_id: *const SubShapeId,
                 contact_position: *const [3]Real,
                 contact_normal: *const [3]f32,
@@ -407,13 +407,13 @@ pub const CharacterContactListener = extern struct {
         OnContactValidate: *const fn (
             self: *CharacterContactListener,
             character: *const CharacterVirtual,
-            body: *const Body,
+            body: *const BodyId,
             sub_shape_id: *const SubShapeId,
         ) callconv(.C) bool,
         OnContactAdded: *const fn (
             self: *CharacterContactListener,
             character: *const CharacterVirtual,
-            body: *const Body,
+            body: *const BodyId,
             sub_shape_id: *const SubShapeId,
             contact_position: *const [3]Real,
             contact_normal: *const [3]f32,
@@ -422,7 +422,7 @@ pub const CharacterContactListener = extern struct {
         OnContactSolve: *const fn (
             self: *CharacterContactListener,
             character: *const CharacterVirtual,
-            body: *const Body,
+            body: *const BodyId,
             sub_shape_id: *const SubShapeId,
             contact_position: *const [3]Real,
             contact_normal: *const [3]f32,
