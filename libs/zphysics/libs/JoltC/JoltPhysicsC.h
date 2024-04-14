@@ -808,6 +808,25 @@ typedef struct JPC_ShapeFilterVTable
     uint32_t bodyId2;
 } JPC_ShapeFilterVTable;
 
+typedef struct JPC_CollideShapeCollectorVTable
+{
+    _JPC_VTABLE_HEADER;
+
+    // Required, *cannot* be NULL.
+    void
+    (*Reset)(void *in_self);
+
+    // Required, *cannot* be NULL.
+    void
+    (*OnBody)(void *in_self,
+            const JPC_Body *in_body);
+
+    // Required, *cannot* be NULL.
+    void
+    (*AddHit)(void *in_self,
+            const JPC_CollideShapeResult *in_result);
+} JPC_CollideShapeCollectorVTable;
+
 typedef struct JPC_PhysicsStepListenerVTable
 {
     _JPC_VTABLE_HEADER;
@@ -1304,6 +1323,17 @@ JPC_NarrowPhaseQuery_CastRay(const JPC_NarrowPhaseQuery *in_query,
                              const void *in_broad_phase_layer_filter, // Can be NULL (no filter)
                              const void *in_object_layer_filter, // Can be NULL (no filter)
                              const void *in_body_filter); // Can be NULL (no filter)
+JPC_API void
+JPC_NarrowPhaseQuery_CollideShape(const JPC_NarrowPhaseQuery *in_query,
+                            const JPC_Shape *in_shape,
+                            const float in_shape_scale[3],
+                            const JPC_Real in_center_of_mass_transform[16],
+                            const JPC_Real in_base_offset[3],
+                            void *io_collector,
+                            const void *in_broad_phase_layer_filter,
+                            const void *in_object_layer_filter,
+                            const void *in_body_filter,
+                            const void *in_shape_filter);
 //--------------------------------------------------------------------------------------------------
 //
 // JPC_ShapeSettings
