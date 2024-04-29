@@ -1,4 +1,4 @@
-# zwin32 v0.9.0 - Zig bindings for Win32 API
+# zwin32 v0.10.0 - Zig bindings for Win32 API
 
 Can be used on Windows and Linux. Contains partial bindings for:
 * Win32 API
@@ -15,7 +15,7 @@ Can be used on Windows and Linux. Contains partial bindings for:
 
 ## Getting started
 
-Copy `zwin32` folder to a `libs` subdirectory of the root of your project and add the following to your `build.zig.zon` .dependencies:
+Copy `zwin32` to a subdirectory of your project and add the following to your `build.zig.zon` .dependencies:
 ```zig
     .zwin32 = .{ .path = "libs/zwin32" },
 ```
@@ -23,17 +23,19 @@ Copy `zwin32` folder to a `libs` subdirectory of the root of your project and ad
 Then in your `build.zig` add:
 
 ```zig
-const std = @import("std");
-const zwin32 = @import("zwin32");
+pub fn build(b: *std.Build) !void {
+    const exe = b.addExecutable(.{ ... });
 
-pub fn build(b: *std.Build) void {
-    ...
-    const optimize = b.standardOptimizeOption(.{});
-    const target = b.standardTargetOptions(.{});
+    const zwin32 = b.dependency("zwin32", .{});
+    const zwin32_path = zwin32.path("").getPath(b);
+    
+    exe.root_module.addImport("zwin32", zwin32.module("root"));
+    
+    try @import("zwin32").install_xaudio2(&tests.step, .bin, zwin32_path);
 
-    const zwin32_pkg = zwin32.package(b, target, optimize, .{});
+    try @import("zwin32").install_d3d12(&tests.step, .bin, zwin32_path);
 
-    zwin32_pkg.link(exe, .{ .d3d12 = true, .xaudio2 = true, .directml = true });
+    try @import("zwin32").install_directml(&tests.step, .bin, zwin32_path);
 }
 ```
 

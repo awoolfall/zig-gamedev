@@ -441,7 +441,7 @@ const DebugRenderer = struct {
         zgui.end();
     }
 
-    pub fn shouldBodyDraw(body: *const zphy.Body) align(zphy.DebugRenderer.BodyDrawFilterFuncAlignment) callconv(.C) bool {
+    pub fn shouldBodyDraw(body: *const zphy.Body) callconv(.C) bool {
         if (body.object_layer == object_layers.non_moving) return false;
         return true;
     }
@@ -527,6 +527,7 @@ const DebugRenderer = struct {
 };
 
 const DemoState = struct {
+    window: *zglfw.Window,
     gctx: *zgpu.GraphicsContext,
 
     mesh_render_pipe: zgpu.RenderPipelineHandle = .{},
@@ -654,7 +655,21 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*DemoState {
     //
     // Graphics
     //
-    const gctx = try zgpu.GraphicsContext.create(allocator, window, .{});
+    const gctx = try zgpu.GraphicsContext.create(
+        allocator,
+        .{
+            .window = window,
+            .fn_getTime = @ptrCast(&zglfw.getTime),
+            .fn_getFramebufferSize = @ptrCast(&zglfw.Window.getFramebufferSize),
+            .fn_getWin32Window = @ptrCast(&zglfw.getWin32Window),
+            .fn_getX11Display = @ptrCast(&zglfw.getX11Display),
+            .fn_getX11Window = @ptrCast(&zglfw.getX11Window),
+            .fn_getWaylandDisplay = @ptrCast(&zglfw.getWaylandDisplay),
+            .fn_getWaylandSurface = @ptrCast(&zglfw.getWaylandWindow),
+            .fn_getCocoaWindow = @ptrCast(&zglfw.getCocoaWindow),
+        },
+        .{},
+    );
     errdefer gctx.destroy(allocator);
 
     // Uniform buffer and layout
@@ -735,6 +750,7 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*DemoState {
     //
     const demo = try allocator.create(DemoState);
     demo.* = .{
+        .window = window,
         .gctx = gctx,
         .uniform_bg = uniform_bg,
         .vertex_buf = vertex_buf,
@@ -820,7 +836,7 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*DemoState {
         var i: u32 = 0;
         while (i < 9) : (i += 1) {
             const fi = @as(f32, @floatFromInt(i));
-            const angle: f32 = std.math.degreesToRadians(f32, fi * 40.0);
+            const angle: f32 = std.math.degreesToRadians(fi * 40.0);
             demo.physics_objects[i] = try body_interface.createAndAddBody(.{
                 .position = .{ 24.0 * std.math.cos(angle), 8.0 + std.math.sin(angle), 16.0 * std.math.sin(angle), 1 },
                 .shape = sphere_shape,
@@ -959,7 +975,7 @@ fn destroy(allocator: std.mem.Allocator, demo: *DemoState) void {
 }
 
 fn update(demo: *DemoState) void {
-    const window = demo.gctx.window;
+    const window = demo.window;
 
     { // Handle camera rotation with mouse.
         const cursor_pos = window.getCursorPos();
@@ -1261,8 +1277,10 @@ pub fn main() !void {
     { // Change current working directory to where the executable is located.
         var buffer: [1024]u8 = undefined;
         const path = std.fs.selfExeDirPath(buffer[0..]) catch ".";
-        std.os.chdir(path) catch {};
+        std.posix.chdir(path) catch {};
     }
+
+    zglfw.windowHintTyped(.client_api, .no_api);
 
     const window = try zglfw.Window.create(1600, 1000, window_title, null);
     defer window.destroy();

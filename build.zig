@@ -1,9 +1,9 @@
 const builtin = @import("builtin");
 const std = @import("std");
 
-pub const min_zig_version = std.SemanticVersion{ .major = 0, .minor = 12, .patch = 0, .pre = "dev.2063" };
+pub const min_zig_version = std.SemanticVersion{ .major = 0, .minor = 13, .patch = 0, .pre = "" };
 
-pub fn build(b: *std.Build) void {
+pub fn build(b: *std.Build) !void {
     ensureZigVersion() catch return;
 
     if (checkGitLfsContent() == false) {
@@ -49,31 +49,14 @@ pub fn build(b: *std.Build) void {
     };
 
     //
-    // Packages
+    // Build and install sample applications
     //
-    packagesCrossPlatform(b, options);
-
+    buildAndInstallSamples(b, options, samples_cross_platform);
     if (target.result.os.tag == .windows) {
         if (builtin.os.tag == .windows or builtin.os.tag == .linux) {
-            packagesWindowsLinux(b, options);
-
+            buildAndInstallSamples(b, options, samples_windows_linux);
             if (builtin.os.tag == .windows) {
-                packagesWindows(b, options);
-            }
-        }
-    }
-
-    //
-    // Sample applications
-    //
-    samples(b, options);
-
-    if (target.result.os.tag == .windows) {
-        if (builtin.os.tag == .windows or builtin.os.tag == .linux) {
-            samplesWindowsLinux(b, options);
-
-            if (builtin.os.tag == .windows) {
-                samplesWindows(b, options);
+                buildAndInstallSamples(b, options, samples_windows);
             }
         }
     }
@@ -82,15 +65,22 @@ pub fn build(b: *std.Build) void {
     // Tests
     //
     const test_step = b.step("test", "Run all tests");
-    tests(b, target, optimize, test_step);
+    try tests(b, target, optimize, test_step);
     if (builtin.os.tag == .windows) {
-        testsWindows(b, target, optimize, test_step);
+        try testsWindows(b, target, optimize, test_step);
     }
 
     //
     // Benchmarks
     //
-    benchmarks(b, options);
+    {
+        const benchmark_step = b.step("benchmark", "Run all benchmarks");
+
+        const zmath = b.dependency("zmath", .{
+            .optimize = .ReleaseFast,
+        });
+        benchmark_step.dependOn(&b.addRunArtifact(zmath.artifact("zmath-benchmarks")).step);
+    }
 
     //
     // Experiments
@@ -100,150 +90,71 @@ pub fn build(b: *std.Build) void {
     }
 }
 
-fn packagesCrossPlatform(b: *std.Build, options: Options) void {
-    const target = options.target;
-    const optimize = options.optimize;
+const samples_windows = struct {
+    pub const audio_experiments = @import("samples/audio_experiments/build.zig");
+    pub const audio_playback_test = @import("samples/audio_playback_test/build.zig");
+    pub const directml_convolution_test = @import("samples/directml_convolution_test/build.zig");
+    pub const vector_graphics_test = @import("samples/vector_graphics_test/build.zig");
+};
 
-    zopengl_pkg = zopengl.package(b, target, optimize, .{});
-    zmath_pkg = zmath.package(b, target, optimize, .{});
-    zpool_pkg = zpool.package(b, target, optimize, .{});
-    zglfw_pkg = zglfw.package(b, target, optimize, .{});
-    zsdl_pkg = zsdl.package(b, target, optimize, .{});
-    zmesh_pkg = zmesh.package(b, target, optimize, .{});
-    znoise_pkg = znoise.package(b, target, optimize, .{});
-    zstbi_pkg = zstbi.package(b, target, optimize, .{});
-    zbullet_pkg = zbullet.package(b, target, optimize, .{});
-    zgui_glfw_wgpu_pkg = zgui.package(b, target, optimize, .{
-        .options = .{ .backend = .glfw_wgpu },
-    });
-    zgui_glfw_gl_pkg = zgui.package(b, target, optimize, .{
-        .options = .{ .backend = .glfw_opengl3 },
-    });
-    zgpu_pkg = zgpu.package(b, target, optimize, .{
-        .options = .{},
-        .deps = .{ .zpool = zpool_pkg, .zglfw = zglfw_pkg },
-    });
-    ztracy_pkg = ztracy.package(b, target, optimize, .{
-        .options = .{ .enable_ztracy = true, .enable_fibers = true },
-    });
-    zphysics_pkg = zphysics.package(b, target, optimize, .{});
-    zaudio_pkg = zaudio.package(b, target, optimize, .{});
-    zflecs_pkg = zflecs.package(b, target, optimize, .{});
-}
+const samples_windows_linux = struct {
+    pub const bindless = @import("samples/bindless/build.zig");
+    pub const mesh_shader_test = @import("samples/mesh_shader_test/build.zig");
+    pub const minimal_d3d12 = @import("samples/minimal_d3d12/build.zig");
+    pub const minimal_glfw_d3d12 = @import("samples/minimal_glfw_d3d12/build.zig");
+    pub const minimal_zgui_glfw_d3d12 = @import("samples/minimal_zgui_glfw_d3d12/build.zig");
+    pub const minimal_zgui_win32_d3d12 = @import("samples/minimal_zgui_win32_d3d12/build.zig");
+    pub const rasterization = @import("samples/rasterization/build.zig");
+    // TODO: get simple raytracer working again
+    //pub const simple_raytracer = @import("samples/simple_raytracer/build.zig");
+    pub const textured_quad = @import("samples/textured_quad/build.zig");
+    pub const triangle = @import("samples/triangle/build.zig");
+};
 
-fn packagesWindowsLinux(b: *std.Build, options: Options) void {
-    const target = options.target;
-    const optimize = options.optimize;
+const samples_cross_platform = struct {
+    pub const minimal_glfw_gl = @import("samples/minimal_glfw_gl/build.zig");
+    pub const minimal_sdl_gl = @import("samples/minimal_sdl_gl/build.zig");
+    pub const minimal_zgui_glfw_gl = @import("samples/minimal_zgui_glfw_gl/build.zig");
 
-    zwin32_pkg = zwin32.package(b, target, optimize, .{});
-    zd3d12_pkg = zd3d12.package(b, target, optimize, .{
-        .options = .{
-            .enable_debug_layer = options.zd3d12_enable_debug_layer,
-            .enable_gbv = options.zd3d12_enable_gbv,
-            .upload_heap_capacity = 32 * 1024 * 1024,
-        },
-        .deps = .{ .zwin32 = zwin32_pkg.zwin32 },
-    });
-    zpix_pkg = zpix.package(b, target, optimize, .{
-        .options = .{ .enable = options.zpix_enable },
-        .deps = .{ .zwin32 = zwin32_pkg.zwin32 },
-    });
-    common_pkg = common.package(b, target, optimize, .{
-        .deps = .{ .zwin32 = zwin32_pkg.zwin32, .zd3d12 = zd3d12_pkg.zd3d12 },
-    });
-}
+    pub usingnamespace struct { // WebGPU samples
+        pub const audio_experiments_wgpu = @import("samples/audio_experiments_wgpu/build.zig");
+        pub const bullet_physics_test_wgpu = @import("samples/bullet_physics_test_wgpu/build.zig");
+        pub const frame_pacing_wgpu = @import("samples/frame_pacing_wgpu/build.zig");
+        pub const gamepad_wgpu = @import("samples/gamepad_wgpu/build.zig");
+        pub const gui_test_wgpu = @import("samples/gui_test_wgpu/build.zig");
+        pub const instanced_pills_wgpu = @import("samples/instanced_pills_wgpu/build.zig");
+        pub const layers_wgpu = @import("samples/layers_wgpu/build.zig");
+        pub const minimal_zgpu_zgui = @import("samples/minimal_zgpu_zgui/build.zig");
+        pub const monolith = @import("samples/monolith/build.zig");
+        pub const physically_based_rendering_wgpu = @import("samples/physically_based_rendering_wgpu/build.zig");
+        pub const physics_test_wgpu = @import("samples/physics_test_wgpu/build.zig");
+        pub const procedural_mesh_wgpu = @import("samples/procedural_mesh_wgpu/build.zig");
+        pub const textured_quad_wgpu = @import("samples/textured_quad_wgpu/build.zig");
+        pub const triangle_wgpu = @import("samples/triangle_wgpu/build.zig");
+    };
+};
 
-fn packagesWindows(b: *std.Build, options: Options) void {
-    const target = options.target;
-    const optimize = options.optimize;
+fn buildAndInstallSamples(b: *std.Build, options: Options, comptime samples: type) void {
+    inline for (comptime std.meta.declarations(samples)) |d| {
+        const exe = @field(samples, d.name).build(b, options);
 
-    zd3d12_d2d_pkg = zd3d12.package(b, target, optimize, .{
-        .options = .{
-            .enable_debug_layer = options.zd3d12_enable_debug_layer,
-            .enable_gbv = options.zd3d12_enable_gbv,
-            .enable_d2d = true,
-        },
-        .deps = .{ .zwin32 = zwin32_pkg.zwin32 },
-    });
-    common_d2d_pkg = common.package(b, target, optimize, .{
-        .deps = .{ .zwin32 = zwin32_pkg.zwin32, .zd3d12 = zd3d12_d2d_pkg.zd3d12 },
-    });
-    zxaudio2_pkg = zxaudio2.package(b, target, optimize, .{
-        .options = .{ .enable_debug_layer = options.zd3d12_enable_debug_layer },
-        .deps = .{ .zwin32 = zwin32_pkg.zwin32 },
-    });
-}
+        // TODO: Problems with LTO on Windows.
+        if (exe.rootModuleTarget().os.tag == .windows) {
+            exe.want_lto = false;
+        }
 
-fn samples(b: *std.Build, options: Options) void {
-    const minimal_glfw_gl = @import("samples/minimal_glfw_gl/build.zig");
-    const minimal_sdl_gl = @import("samples/minimal_sdl_gl/build.zig");
-    const minimal_zgui_glfw_gl = @import("samples/minimal_zgui_glfw_gl/build.zig");
+        if (exe.root_module.optimize == .ReleaseFast) {
+            exe.root_module.strip = true;
+        }
 
-    install(b, minimal_glfw_gl.build(b, options), "minimal_glfw_gl");
-    install(b, minimal_sdl_gl.build(b, options), "minimal_sdl_gl");
-    install(b, minimal_zgui_glfw_gl.build(b, options), "minimal_zgui_glfw_gl");
+        const install_exe = b.addInstallArtifact(exe, .{});
+        b.getInstallStep().dependOn(&install_exe.step);
+        b.step(d.name, "Build '" ++ d.name ++ "' demo").dependOn(&install_exe.step);
 
-    if (zgpu.checkTargetSupported(options.target)) {
-        const triangle_wgpu = @import("samples/triangle_wgpu/build.zig");
-        const procedural_mesh_wgpu = @import("samples/procedural_mesh_wgpu/build.zig");
-        const textured_quad_wgpu = @import("samples/textured_quad_wgpu/build.zig");
-        const physically_based_rendering_wgpu = @import("samples/physically_based_rendering_wgpu/build.zig");
-        const bullet_physics_test_wgpu = @import("samples/bullet_physics_test_wgpu/build.zig");
-        const audio_experiments_wgpu = @import("samples/audio_experiments_wgpu/build.zig");
-        const gui_test_wgpu = @import("samples/gui_test_wgpu/build.zig");
-        const minimal_zgpu_zgui = @import("samples/minimal_zgpu_zgui/build.zig");
-        const frame_pacing_wgpu = @import("samples/frame_pacing_wgpu/build.zig");
-        const instanced_pills_wgpu = @import("samples/instanced_pills_wgpu/build.zig");
-        const layers_wgpu = @import("samples/layers_wgpu/build.zig");
-        const gamepad_wgpu = @import("samples/gamepad_wgpu/build.zig");
-        const physics_test_wgpu = @import("samples/physics_test_wgpu/build.zig");
-        const monolith = @import("samples/monolith/build.zig");
-
-        install(b, triangle_wgpu.build(b, options), "triangle_wgpu");
-        install(b, textured_quad_wgpu.build(b, options), "textured_quad_wgpu");
-        install(b, gui_test_wgpu.build(b, options), "gui_test_wgpu");
-        install(b, minimal_zgpu_zgui.build(b, options), "minimal_zgpu_zgui");
-        install(b, frame_pacing_wgpu.build(b, options), "frame_pacing_wgpu");
-        install(b, physically_based_rendering_wgpu.build(b, options), "physically_based_rendering_wgpu");
-        install(b, instanced_pills_wgpu.build(b, options), "instanced_pills_wgpu");
-        install(b, gamepad_wgpu.build(b, options), "gamepad_wgpu");
-        install(b, layers_wgpu.build(b, options), "layers_wgpu");
-        install(b, bullet_physics_test_wgpu.build(b, options), "bullet_physics_test_wgpu");
-        install(b, procedural_mesh_wgpu.build(b, options), "procedural_mesh_wgpu");
-        install(b, physics_test_wgpu.build(b, options), "physics_test_wgpu");
-        install(b, monolith.build(b, options), "monolith");
-        install(b, audio_experiments_wgpu.build(b, options), "audio_experiments_wgpu");
+        const run_cmd = b.addRunArtifact(exe);
+        run_cmd.step.dependOn(&install_exe.step);
+        b.step(d.name ++ "-run", "Run '" ++ d.name ++ "' demo").dependOn(&run_cmd.step);
     }
-}
-
-fn samplesWindowsLinux(b: *std.Build, options: Options) void {
-    const minimal_d3d12 = @import("samples/minimal_d3d12/build.zig");
-    const textured_quad = @import("samples/textured_quad/build.zig");
-    const triangle = @import("samples/triangle/build.zig");
-    const mesh_shader_test = @import("samples/mesh_shader_test/build.zig");
-    const rasterization = @import("samples/rasterization/build.zig");
-    const bindless = @import("samples/bindless/build.zig");
-    //const simple_raytracer = @import("samples/simple_raytracer/build.zig");
-
-    install(b, minimal_d3d12.build(b, options), "minimal_d3d12");
-    install(b, bindless.build(b, options), "bindless");
-    install(b, triangle.build(b, options), "triangle");
-    //install(b, simple_raytracer.build(b, options), "simple_raytracer");
-    install(b, textured_quad.build(b, options), "textured_quad");
-    install(b, rasterization.build(b, options), "rasterization");
-    install(b, mesh_shader_test.build(b, options), "mesh_shader_test");
-}
-
-fn samplesWindows(b: *std.Build, options: Options) void {
-    const audio_playback_test = @import("samples/audio_playback_test/build.zig");
-    const audio_experiments = @import("samples/audio_experiments/build.zig");
-    const vector_graphics_test = @import("samples/vector_graphics_test/build.zig");
-    const directml_convolution_test = @import("samples/directml_convolution_test/build.zig");
-
-    install(b, vector_graphics_test.build(b, options), "vector_graphics_test");
-    install(b, directml_convolution_test.build(b, options), "directml_convolution_test");
-    install(b, audio_playback_test.build(b, options), "audio_playback_test");
-    install(b, audio_experiments.build(b, options), "audio_experiments");
 }
 
 fn tests(
@@ -251,32 +162,121 @@ fn tests(
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     test_step: *std.Build.Step,
-) void {
-    test_step.dependOn(zaudio.runTests(b, optimize, target));
+) !void {
+    // TODO: Renable randomly failing sdl2_ttf test on windows
+    if (target.result.os.tag != .windows) {
+        const zaudio = b.dependency("zaudio", .{
+            .target = target,
+            .optimize = optimize,
+        });
+        test_step.dependOn(&b.addRunArtifact(zaudio.artifact("zaudio-tests")).step);
+    }
+
     // TODO: Get zbullet tests working on Windows again
     if (target.result.os.tag != .windows) {
-        test_step.dependOn(zbullet.runTests(b, optimize, target));
-    }
-    test_step.dependOn(zflecs.runTests(b, optimize, target));
-    test_step.dependOn(zglfw.runTests(b, optimize, target));
-    test_step.dependOn(zgpu.runTests(b, optimize, target));
-    test_step.dependOn(zgui.runTests(b, optimize, target));
-    test_step.dependOn(zjobs.runTests(b, optimize, target));
-    test_step.dependOn(zmath.runTests(b, optimize, target));
-    test_step.dependOn(zmesh.runTests(b, optimize, target));
-    test_step.dependOn(znoise.runTests(b, optimize, target));
-    test_step.dependOn(zopengl.runTests(b, optimize, target));
-    test_step.dependOn(zphysics.runTests(b, optimize, target));
-    test_step.dependOn(zpool.runTests(b, optimize, target));
-
-    // TODO(hazeycode): Fix tests linking SDL on Windows and macOS
-    switch (target.result.os.tag) {
-        .windows, .macos => {},
-        else => test_step.dependOn(zsdl.runTests(b, optimize, target)),
+        const zbullet = b.dependency("zbullet", .{
+            .target = target,
+            .optimize = optimize,
+        });
+        test_step.dependOn(&b.addRunArtifact(zbullet.artifact("zbullet-tests")).step);
     }
 
-    test_step.dependOn(zstbi.runTests(b, optimize, target));
-    test_step.dependOn(ztracy.runTests(b, optimize, target));
+    const zflecs = b.dependency("zflecs", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    test_step.dependOn(&b.addRunArtifact(zflecs.artifact("zflecs-tests")).step);
+
+    const zglfw = b.dependency("zglfw", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    test_step.dependOn(&b.addRunArtifact(zglfw.artifact("zglfw-tests")).step);
+
+    const zgpu = b.dependency("zgpu", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    test_step.dependOn(&b.addRunArtifact(zgpu.artifact("zgpu-tests")).step);
+
+    const zgui = b.dependency("zgui", .{
+        .target = target,
+        .optimize = optimize,
+        .with_te = true,
+    });
+    test_step.dependOn(&b.addRunArtifact(zgui.artifact("zgui-tests")).step);
+
+    const zmath = b.dependency("zmath", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    test_step.dependOn(&b.addRunArtifact(zmath.artifact("zmath-tests")).step);
+
+    const zmesh = b.dependency("zmesh", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    test_step.dependOn(&b.addRunArtifact(zmesh.artifact("zmesh-tests")).step);
+
+    const zopengl = b.dependency("zopengl", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    test_step.dependOn(&b.addRunArtifact(zopengl.artifact("zopengl-tests")).step);
+
+    const zphysics = b.dependency("zphysics", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    test_step.dependOn(&b.addRunArtifact(zphysics.artifact("zphysics-tests")).step);
+
+    const zpool = b.dependency("zpool", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    test_step.dependOn(&b.addRunArtifact(zpool.artifact("zpool-tests")).step);
+
+    const zsdl = b.dependency("zsdl", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const sdl2_tests = b.addRunArtifact(zsdl.artifact("sdl2-tests"));
+    if (target.result.os.tag == .windows) {
+        sdl2_tests.setCwd(.{ .path = b.getInstallPath(.bin, "") });
+    }
+    test_step.dependOn(&sdl2_tests.step);
+    try @import("zsdl").install_sdl2(&sdl2_tests.step, target.result, .bin, "libs/zsdl");
+
+    // TODO: Renable randomly failing sdl2_ttf test on windows
+    if (target.result.os.tag != .windows) {
+        const sdl2_ttf_tests = b.addRunArtifact(zsdl.artifact("sdl2_ttf-tests"));
+        if (target.result.os.tag == .windows) {
+            sdl2_ttf_tests.setCwd(.{ .path = b.getInstallPath(.bin, "") });
+        }
+        test_step.dependOn(&sdl2_ttf_tests.step);
+        try @import("zsdl").install_sdl2_ttf(&sdl2_tests.step, target.result, .bin, "libs/zsdl");
+    }
+
+    // TODO(hazeycode): SDL3 tests
+
+    const zjobs = b.dependency("zjobs", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    test_step.dependOn(&b.addRunArtifact(zjobs.artifact("zjobs-tests")).step);
+
+    const zstbi = b.dependency("zstbi", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    test_step.dependOn(&b.addRunArtifact(zstbi.artifact("zstbi-tests")).step);
+
+    const ztracy = b.dependency("ztracy", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    test_step.dependOn(&b.addRunArtifact(ztracy.artifact("ztracy-tests")).step);
 }
 
 fn testsWindows(
@@ -284,65 +284,31 @@ fn testsWindows(
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     test_step: *std.Build.Step,
-) void {
-    test_step.dependOn(zd3d12.runTests(b, optimize, target));
-    test_step.dependOn(zpix.runTests(b, optimize, target));
-    test_step.dependOn(zwin32.runTests(b, optimize, target));
-    test_step.dependOn(zxaudio2.runTests(b, optimize, target));
+) !void {
+    const zd3d12 = b.dependency("zd3d12", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    test_step.dependOn(&b.addRunArtifact(zd3d12.artifact("zd3d12-tests")).step);
+
+    const zpix = b.dependency("zpix", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    test_step.dependOn(&b.addRunArtifact(zpix.artifact("zpix-tests")).step);
+
+    const zwin32 = b.dependency("zwin32", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    test_step.dependOn(&b.addRunArtifact(zwin32.artifact("zwin32-tests")).step);
+
+    const zxaudio2 = b.dependency("zxaudio2", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    test_step.dependOn(&b.addRunArtifact(zxaudio2.artifact("zxaudio2-tests")).step);
 }
-
-fn benchmarks(b: *std.Build, options: Options) void {
-    const benchmark_step = b.step("benchmark", "Run all benchmarks");
-
-    benchmark_step.dependOn(zmath.runBenchmarks(b, options.target, options.optimize));
-}
-
-pub var zmath_pkg: zmath.Package = undefined;
-pub var znoise_pkg: znoise.Package = undefined;
-pub var zopengl_pkg: zopengl.Package = undefined;
-pub var zsdl_pkg: zsdl.Package = undefined;
-pub var zpool_pkg: zpool.Package = undefined;
-pub var zmesh_pkg: zmesh.Package = undefined;
-pub var zglfw_pkg: zglfw.Package = undefined;
-pub var zstbi_pkg: zstbi.Package = undefined;
-pub var zbullet_pkg: zbullet.Package = undefined;
-pub var zgui_glfw_wgpu_pkg: zgui.Package = undefined;
-pub var zgui_glfw_gl_pkg: zgui.Package = undefined;
-pub var zgpu_pkg: zgpu.Package = undefined;
-pub var ztracy_pkg: ztracy.Package = undefined;
-pub var zphysics_pkg: zphysics.Package = undefined;
-pub var zaudio_pkg: zaudio.Package = undefined;
-pub var zflecs_pkg: zflecs.Package = undefined;
-
-pub var zwin32_pkg: zwin32.Package = undefined;
-pub var zd3d12_pkg: zd3d12.Package = undefined;
-pub var zpix_pkg: zpix.Package = undefined;
-pub var zxaudio2_pkg: zxaudio2.Package = undefined;
-pub var common_pkg: common.Package = undefined;
-pub var common_d2d_pkg: common.Package = undefined;
-pub var zd3d12_d2d_pkg: zd3d12.Package = undefined;
-
-const zsdl = @import("zsdl");
-const zopengl = @import("zopengl");
-const zmath = @import("zmath");
-const zglfw = @import("zglfw");
-const zpool = @import("zpool");
-const zjobs = @import("zjobs");
-const zmesh = @import("zmesh");
-const znoise = @import("znoise");
-const zstbi = @import("zstbi");
-const zwin32 = @import("zwin32");
-const zd3d12 = @import("zd3d12");
-const zxaudio2 = @import("zxaudio2");
-const zpix = @import("zpix");
-const common = @import("common");
-const zbullet = @import("zbullet");
-const zgui = @import("zgui");
-const zgpu = @import("zgpu");
-const ztracy = @import("ztracy");
-const zphysics = @import("zphysics");
-const zaudio = @import("zaudio");
-const zflecs = @import("zflecs");
 
 pub const Options = struct {
     optimize: std.builtin.Mode,
@@ -353,31 +319,6 @@ pub const Options = struct {
 
     zpix_enable: bool,
 };
-
-fn install(b: *std.Build, exe: *std.Build.Step.Compile, comptime name: []const u8) void {
-    // TODO: Problems with LTO on Windows.
-    if (exe.rootModuleTarget().os.tag == .windows) {
-        exe.want_lto = false;
-    }
-
-    if (exe.root_module.optimize == .ReleaseFast) {
-        exe.root_module.strip = true;
-    }
-
-    //comptime var desc_name: [256]u8 = [_]u8{0} ** 256;
-    //comptime _ = std.mem.replace(u8, name, "", "", desc_name[0..]);
-    //comptime var desc_size = std.mem.indexOf(u8, &desc_name, "\x00").?;
-
-    const install_step = b.step(name, "Build '" ++ name ++ "' demo");
-    install_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
-
-    const run_step = b.step(name ++ "-run", "Run '" ++ name ++ "' demo");
-    const run_cmd = b.addRunArtifact(exe);
-    run_cmd.step.dependOn(install_step);
-    run_step.dependOn(&run_cmd.step);
-
-    b.getInstallStep().dependOn(install_step);
-}
 
 fn ensureZigVersion() !void {
     var installed_ver = builtin.zig_version;

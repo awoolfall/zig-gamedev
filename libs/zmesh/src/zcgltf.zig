@@ -898,7 +898,7 @@ test "extern struct layout" {
             continue;
         }
         if (comptime std.meta.activeTag(@typeInfo(ZigType)) == .Struct and
-            @typeInfo(ZigType).Struct.layout == .Extern)
+            @typeInfo(ZigType).Struct.layout == .@"extern")
         {
             comptime var c_name_buf: [256]u8 = undefined;
             const c_name = comptime try cTypeNameFromZigTypeName(&c_name_buf, decl.name);
@@ -943,8 +943,8 @@ test "enum" {
             };
             inline for (comptime std.meta.fieldNames(ZigType)) |field_name| {
                 const c_field_name = comptime buildName: {
-                    comptime var buf: [256]u8 = undefined;
-                    comptime var fbs = std.io.fixedBufferStream(&buf);
+                    var buf: [256]u8 = undefined;
+                    var fbs = std.io.fixedBufferStream(&buf);
                     try fbs.writer().writeAll(c_name);
                     try fbs.writer().writeByte('_');
                     try fbs.writer().writeAll(field_name);
@@ -954,7 +954,7 @@ test "enum" {
                     @field(c, c_field_name),
                     @intFromEnum(@field(ZigType, field_name)),
                 ) catch |err| {
-                    std.log.err("{s}.{s} != {s}", .{ decl.name, field_name, c_field_name });
+                    std.log.err(decl.name ++ "." ++ field_name ++ " != " ++ c_field_name, .{});
                     return err;
                 };
             }

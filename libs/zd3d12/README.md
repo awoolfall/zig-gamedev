@@ -15,7 +15,7 @@ Example programs: https://github.com/michal-z/zig-gamedev/tree/main/samples/intr
 
 ## Getting started
 
-Copy `zd3d12` and `zwin32` folders to a `libs` subdirectory of the root of your project and and add the following to your `build.zig.zon` .dependencies:
+Copy `zd3d12` and `zwin32` to a subdirectory of your project and and add the following to your `build.zig.zon` .dependencies:
 ```zig
     .zd3d12 = .{ .path = "libs/zd3d12" },
     .zwin32 = .{ .path = "libs/zwin32" },
@@ -24,26 +24,17 @@ Copy `zd3d12` and `zwin32` folders to a `libs` subdirectory of the root of your 
 Then in your `build.zig` add:
 
 ```zig
-const std = @import("std");
-const zwin32 = @import("zwin32");
-const zd3d12 = @import("zd3d12");
-
 pub fn build(b: *std.Build) void {
-    ...
-    const optimize = b.standardOptimizeOption(.{});
-    const target = b.standardTargetOptions(.{});
+    const exe = b.addExecutable(.{ ... });
 
-    const zwin32_pkg = zwin32.package(b, target, optimize, .{});
-    const zd3d12_pkg = zd3d12.package(b, target, optimize, .{
-        .options = .{
-            .enable_debug_layer = false,
-            .enable_gbv = false,
-        },
-        .deps = .{ .zwin32 = zwin32_pkg.zwin32 },
+    // Optionally install d3d12 libs to zig-out/bin (or somewhere else)
+    try @import("zwin32").install_d3d12(&tests.step, .bin, zwin32.path("").getPath(b));
+
+    const zd3d12 = b.dependency("zd3d12", .{
+        .debug_layer = false,
+        .gbv = false,
     });
-
-    zwin32_pkg.link(exe, .{ .d3d12 = true });
-    zd3d12_pkg.link(exe);
+    exe.root_module.addImport("zd3d12", zd3d12.module("root"));
 }
 ```
 

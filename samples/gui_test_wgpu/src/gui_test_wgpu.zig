@@ -18,10 +18,28 @@ const DemoState = struct {
     font_normal: zgui.Font,
     font_large: zgui.Font,
     draw_list: zgui.DrawList,
+    alloced_input_text_buf: [:0]u8,
+    alloced_input_text_multiline_buf: [:0]u8,
+    alloced_input_text_with_hint_buf: [:0]u8,
 };
+var _te: *zgui.te.TestEngine = undefined;
 
 fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*DemoState {
-    const gctx = try zgpu.GraphicsContext.create(allocator, window, .{});
+    const gctx = try zgpu.GraphicsContext.create(
+        allocator,
+        .{
+            .window = window,
+            .fn_getTime = @ptrCast(&zglfw.getTime),
+            .fn_getFramebufferSize = @ptrCast(&zglfw.Window.getFramebufferSize),
+            .fn_getWin32Window = @ptrCast(&zglfw.getWin32Window),
+            .fn_getX11Display = @ptrCast(&zglfw.getX11Display),
+            .fn_getX11Window = @ptrCast(&zglfw.getX11Window),
+            .fn_getWaylandDisplay = @ptrCast(&zglfw.getWaylandDisplay),
+            .fn_getWaylandSurface = @ptrCast(&zglfw.getWaylandWindow),
+            .fn_getCocoaWindow = @ptrCast(&zglfw.getCocoaWindow),
+        },
+        .{},
+    );
     errdefer gctx.destroy(allocator);
 
     var arena_state = std.heap.ArenaAllocator.init(allocator);
@@ -64,6 +82,7 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*DemoState {
 
     zgui.init(allocator);
     zgui.plot.init();
+    _te = zgui.te.getTestEngine().?;
     const scale_factor = scale_factor: {
         const scale = window.getContentScale();
         break :scale_factor @max(scale[0], scale[1]);
@@ -91,7 +110,6 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*DemoState {
     const style = zgui.getStyle();
 
     style.window_min_size = .{ 320.0, 240.0 };
-    style.window_border_size = 8.0;
     style.scrollbar_size = 6.0;
     {
         var color = style.getColor(.scrollbar_grab);
@@ -119,7 +137,13 @@ fn create(allocator: std.mem.Allocator, window: *zglfw.Window) !*DemoState {
         .font_normal = font_normal,
         .font_large = font_large,
         .draw_list = draw_list,
+        .alloced_input_text_buf = try allocator.allocSentinel(u8, 4, 0),
+        .alloced_input_text_multiline_buf = try allocator.allocSentinel(u8, 4, 0),
+        .alloced_input_text_with_hint_buf = try allocator.allocSentinel(u8, 4, 0),
     };
+    demo.alloced_input_text_buf[0] = 0;
+    demo.alloced_input_text_multiline_buf[0] = 0;
+    demo.alloced_input_text_with_hint_buf[0] = 0;
 
     return demo;
 }
@@ -130,14 +154,94 @@ fn destroy(allocator: std.mem.Allocator, demo: *DemoState) void {
     zgui.destroyDrawList(demo.draw_list);
     zgui.deinit();
     demo.gctx.destroy(allocator);
+    allocator.free(demo.alloced_input_text_buf);
+    allocator.free(demo.alloced_input_text_multiline_buf);
+    allocator.free(demo.alloced_input_text_with_hint_buf);
     allocator.destroy(demo);
 }
+
+var check_b = false;
+fn registerTests() void {
+    _ = _te.registerTest(
+        "Awesome",
+        "should_do_some_magic",
+        @src(),
+        struct {
+            pub fn gui(ctx: *zgui.te.TestContext) !void {
+                _ = ctx;
+            }
+
+            pub fn run(ctx: *zgui.te.TestContext) !void {
+                ctx.setRef("/Demo Settings");
+                ctx.windowFocus("");
+                ctx.itemAction(.open, "Widgets: Main", .{}, null);
+                ctx.itemAction(.click, "**/Button 1", .{}, null);
+                ctx.itemAction(.click, "**/Magic Is Everywhere", .{}, null);
+
+                std.testing.expect(true) catch |err| {
+                    zgui.te.checkTestError(@src(), err);
+                    return;
+                };
+            }
+        },
+    );
+
+    _ = _te.registerTest(
+        "Awesome",
+        "should_do_some_another_magic",
+        @src(),
+        struct {
+            pub fn gui(ctx: *zgui.te.TestContext) !void {
+                _ = ctx; // autofix
+                _ = zgui.begin("Test Window", .{ .flags = .{ .no_saved_settings = true } });
+                defer zgui.end();
+
+                zgui.text("Hello, automation world", .{});
+                _ = zgui.button("Click Me", .{});
+                if (zgui.treeNode("Node")) {
+                    defer zgui.treePop();
+
+                    _ = zgui.checkbox("Checkbox", .{ .v = &check_b });
+                }
+            }
+
+            pub fn run(ctx: *zgui.te.TestContext) !void {
+                ctx.setRef("/Test Window");
+                ctx.windowFocus("");
+
+                ctx.itemAction(.click, "Click Me", .{}, null);
+                ctx.itemAction(.open, "Node", .{}, null);
+                ctx.itemAction(.check, "Node/Checkbox", .{}, null);
+                ctx.itemAction(.uncheck, "Node/Checkbox", .{}, null);
+
+                std.testing.expect(true) catch |err| {
+                    zgui.te.checkTestError(@src(), err);
+                    return;
+                };
+            }
+        },
+    );
+}
+
+const SimpleEnum = enum {
+    first,
+    second,
+    third,
+};
+
+const SparseEnum = enum(i32) {
+    first = 10,
+    second = 100,
+    third = 1000,
+};
 
 fn update(demo: *DemoState) !void {
     zgui.backend.newFrame(
         demo.gctx.swapchain_descriptor.width,
         demo.gctx.swapchain_descriptor.height,
     );
+
+    _te.showTestEngineWindows(null);
 
     zgui.setNextWindowPos(.{ .x = 20.0, .y = 20.0, .cond = .first_use_ever });
     zgui.setNextWindowSize(.{ .w = -1.0, .h = -1.0, .cond = .first_use_ever });
@@ -249,6 +353,8 @@ fn update(demo: *DemoState) !void {
             const static = struct {
                 var selection_index: u32 = 0;
                 var current_item: i32 = 0;
+                var simple_enum_value: SimpleEnum = .first;
+                var sparse_enum_value: SparseEnum = .first;
             };
 
             const items = [_][:0]const u8{ "aaa", "bbb", "ccc", "ddd", "eee", "FFF", "ggg", "hhh" };
@@ -265,6 +371,9 @@ fn update(demo: *DemoState) !void {
                 .current_item = &static.current_item,
                 .items_separated_by_zeros = "Item 0\x00Item 1\x00Item 2\x00Item 3\x00\x00",
             });
+
+            _ = zgui.comboFromEnum("simple enum", &static.simple_enum_value);
+            _ = zgui.comboFromEnum("sparse enum", &static.sparse_enum_value);
         }
 
         if (zgui.collapsingHeader("Widgets: Drag Sliders", .{})) {
@@ -367,9 +476,9 @@ fn update(demo: *DemoState) !void {
 
         if (zgui.collapsingHeader("Widgets: Input with Keyboard", .{})) {
             const static = struct {
-                var buf: [128]u8 = undefined;
-                var buf1: [128]u8 = undefined;
-                var buf2: [128]u8 = undefined;
+                var input_text_buf = [_:0]u8{0} ** 4;
+                var input_text_multiline_buf = [_:0]u8{0} ** 4;
+                var input_text_with_hint_buf = [_:0]u8{0} ** 4;
                 var v1: f32 = 0;
                 var v2: [2]f32 = .{ 0, 0 };
                 var v3: [3]f32 = .{ 0, 0, 0 };
@@ -382,12 +491,30 @@ fn update(demo: *DemoState) !void {
                 var si8: i8 = 0;
                 var v3u8: [3]u8 = .{ 0, 0, 0 };
             };
-            _ = zgui.inputText("Input text", .{ .buf = static.buf[0..] });
-            _ = zgui.inputTextMultiline("Input text multiline", .{ .buf = static.buf1[0..] });
-            _ = zgui.inputTextWithHint(
-                "Input text with hint",
-                .{ .hint = "Enter your name", .buf = static.buf2[0..] },
-            );
+            zgui.separatorText("static input text");
+            _ = zgui.inputText("Input text", .{ .buf = static.input_text_buf[0..] });
+            _ = zgui.text("length of Input text {}", .{std.mem.len(@as([*:0]u8, static.input_text_buf[0..]))});
+
+            _ = zgui.inputTextMultiline("Input text multiline", .{ .buf = static.input_text_multiline_buf[0..] });
+            _ = zgui.text("length of Input text multiline {}", .{std.mem.len(@as([*:0]u8, static.input_text_multiline_buf[0..]))});
+            _ = zgui.inputTextWithHint("Input text with hint", .{
+                .hint = "Enter your name",
+                .buf = static.input_text_with_hint_buf[0..],
+            });
+            _ = zgui.text("length of Input text with hint {}", .{std.mem.len(@as([*:0]u8, static.input_text_with_hint_buf[0..]))});
+
+            zgui.separatorText("alloced input text");
+            _ = zgui.inputText("Input text alloced", .{ .buf = demo.alloced_input_text_buf });
+            _ = zgui.text("length of Input text alloced {}", .{std.mem.len(demo.alloced_input_text_buf.ptr)});
+            _ = zgui.inputTextMultiline("Input text multiline alloced", .{ .buf = demo.alloced_input_text_multiline_buf });
+            _ = zgui.text("length of Input text multiline {}", .{std.mem.len(demo.alloced_input_text_multiline_buf.ptr)});
+            _ = zgui.inputTextWithHint("Input text with hint alloced", .{
+                .hint = "Enter your name",
+                .buf = demo.alloced_input_text_with_hint_buf,
+            });
+            _ = zgui.text("length of Input text with hint alloced {}", .{std.mem.len(demo.alloced_input_text_with_hint_buf.ptr)});
+
+            zgui.separatorText("input numeric");
             _ = zgui.inputFloat("Input float 1", .{ .v = &static.v1 });
             _ = zgui.inputFloat2("Input float 2", .{ .v = &static.v2 });
             _ = zgui.inputFloat3("Input float 3", .{ .v = &static.v3 });
@@ -404,12 +531,13 @@ fn update(demo: *DemoState) !void {
         if (zgui.collapsingHeader("Widgets: Color Editor/Picker", .{})) {
             const static = struct {
                 var col3: [3]f32 = .{ 0, 0, 0 };
-                var col4: [4]f32 = .{ 0, 0, 0, 0 };
+                var col4: [4]f32 = .{ 0, 1, 0, 0 };
                 var col3p: [3]f32 = .{ 0, 0, 0 };
                 var col4p: [4]f32 = .{ 0, 0, 0, 0 };
             };
             _ = zgui.colorEdit3("Color edit 3", .{ .col = &static.col3 });
             _ = zgui.colorEdit4("Color edit 4", .{ .col = &static.col4 });
+            _ = zgui.colorEdit4("Color edit 4 float", .{ .col = &static.col4, .flags = .{ .float = true } });
             _ = zgui.colorPicker3("Color picker 3", .{ .col = &static.col3p });
             _ = zgui.colorPicker4("Color picker 4", .{ .col = &static.col4p });
             _ = zgui.colorButton("color_button_id", .{ .col = .{ 0, 1, 0, 1 } });
@@ -587,8 +715,10 @@ pub fn main() !void {
     {
         var buffer: [1024]u8 = undefined;
         const path = std.fs.selfExeDirPath(buffer[0..]) catch ".";
-        std.os.chdir(path) catch {};
+        std.posix.chdir(path) catch {};
     }
+
+    zglfw.windowHintTyped(.client_api, .no_api);
 
     const window = try zglfw.Window.create(1600, 1000, window_title, null);
     defer window.destroy();
@@ -601,6 +731,8 @@ pub fn main() !void {
 
     const demo = try create(allocator, window);
     defer destroy(allocator, demo);
+
+    registerTests();
 
     while (!window.shouldClose() and window.getKey(.escape) != .press) {
         zglfw.pollEvents();

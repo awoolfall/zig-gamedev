@@ -1,8 +1,8 @@
-# zflecs v0.0.1 - bindings for flecs ECS (wip)
+# zflecs v0.1.0 - Build package and bindings for [flecs](https://github.com/SanderMertens/flecs) ECS 
 
 ## Getting started
 
-Copy `zflecs` folder to a `libs` subdirectory of the root of your project and add the following to your `build.zig.zon` .dependencies:
+Copy `zflecs` folder to a subdirectory of your project and add the following to your `build.zig.zon` .dependencies:
 ```zig
     .zflecs = .{ .path = "libs/zflecs" },
 ```
@@ -10,17 +10,12 @@ Copy `zflecs` folder to a `libs` subdirectory of the root of your project and ad
 Then in your `build.zig` add:
 
 ```zig
-const std = @import("std");
-const zflecs = @import("zflecs");
-
 pub fn build(b: *std.Build) void {
-    ...
-    const optimize = b.standardOptimizeOption(.{});
-    const target = b.standardTargetOptions(.{});
+    const exe = b.addExecutable(.{ ... });
 
-    const zflecs_pkg = zflecs.package(b, target, optimize, .{});
-
-    zflecs_pkg.link(exe);
+    const zflecs = b.dependency("zflecs", .{});
+    exe.root_module.addImport("zflecs", zflecs.module("root"));
+    exe.linkLibrary(zflecs.artifact("flecs"));
 }
 ```
 
@@ -35,17 +30,22 @@ const Velocity = struct { x: f32, y: f32 };
 const Eats = struct {};
 const Apples = struct {};
 
-fn move(it: *ecs.iter_t) callconv(.C) void {
-    const p = ecs.field(it, Position, 1).?;
-    const v = ecs.field(it, Velocity, 2).?;
+fn move_system(positions: []Position, velocities: []const Velocity) void {
+    for (positions, velocities) |*p, v| {
+        p.x += v.x;
+        p.y += v.y;
+    }
+}
 
+//Optionally, systems can receive the components iterator (usually not necessary)
+fn move_system_with_it(it: *ecs.iter_t, positions: []Position, velocities: []const Velocity) void {
     const type_str = ecs.table_str(it.world, it.table).?;
-    std.debug.print("Move entities with [{s}]\n", .{type_str});
+    print("Move entities with [{s}]\n", .{type_str});
     defer ecs.os.free(type_str);
 
-    for (0..it.count()) |i| {
-        p[i].x += v[i].x;
-        p[i].y += v[i].y;
+    for (positions, velocities) |*p, v| {
+        p.x += v.x;
+        p.y += v.y;
     }
 }
 
@@ -59,13 +59,8 @@ pub fn main() !void {
     ecs.TAG(world, Eats);
     ecs.TAG(world, Apples);
 
-    {
-        var system_desc = ecs.system_desc_t{};
-        system_desc.callback = move;
-        system_desc.query.filter.terms[0] = .{ .id = ecs.id(Position) };
-        system_desc.query.filter.terms[1] = .{ .id = ecs.id(Velocity) };
-        ecs.SYSTEM(world, "move system", ecs.OnUpdate, &system_desc);
-    }
+    ecs.ADD_SYSTEM(world, "move system", ecs.OnUpdate, move_system);
+    ecs.ADD_SYSTEM(world, "move system with iterator", ecs.OnUpdate, move_system_with_it);
 
     const bob = ecs.new_entity(world, "Bob");
     _ = ecs.set(world, bob, Position, .{ .x = 0, .y = 0 });
@@ -85,5 +80,5 @@ pub fn main() !void {
 ```
 Move entities with [main.Position, main.Velocity, (Identifier,Name), (main.Eats,main.Apples)]
 Move entities with [main.Position, main.Velocity, (Identifier,Name), (main.Eats,main.Apples)]
-Bob's position is (2, 4)
+Bob's position is (4, 8)
 ```

@@ -4,6 +4,16 @@
 #include "implot.h"
 #endif
 
+#if ZGUI_TE
+#include "imgui_te_engine.h"
+#include "imgui_te_context.h"
+#include "imgui_te_ui.h"
+#include "imgui_te_utils.h"
+#include "imgui_te_exporters.h"
+#endif
+
+#include "imgui_internal.h"
+
 #ifndef ZGUI_API
 #define ZGUI_API
 #endif
@@ -63,12 +73,12 @@ ZGUI_API void zguiEnd(void) {
     ImGui::End();
 }
 
-ZGUI_API bool zguiBeginChild(const char* str_id, float w, float h, bool border, ImGuiWindowFlags flags) {
-    return ImGui::BeginChild(str_id, { w, h }, border, flags);
+ZGUI_API bool zguiBeginChild(const char* str_id, float w, float h, ImGuiChildFlags child_flags, ImGuiWindowFlags window_flags) {
+    return ImGui::BeginChild(str_id, { w, h }, child_flags, window_flags);
 }
 
-ZGUI_API bool zguiBeginChildId(ImGuiID id, float w, float h, bool border, ImGuiWindowFlags flags) {
-    return ImGui::BeginChild(id, { w, h }, border, flags);
+ZGUI_API bool zguiBeginChildId(ImGuiID id, float w, float h, ImGuiChildFlags child_flags, ImGuiWindowFlags window_flags) {
+    return ImGui::BeginChild(id, { w, h }, child_flags, window_flags);
 }
 
 ZGUI_API void zguiEndChild(void) {
@@ -209,6 +219,12 @@ ZGUI_API void zguiGetItemRectMax(float rect[2]) {
 
 ZGUI_API void zguiGetItemRectMin(float rect[2]) {
     const ImVec2 r = ImGui::GetItemRectMin();
+    rect[0] = r.x;
+    rect[1] = r.y;
+}
+
+ZGUI_API void zguiGetItemRectSize(float rect[2]) {
+    const ImVec2 r = ImGui::GetItemRectSize();
     rect[0] = r.x;
     rect[1] = r.y;
 }
@@ -2208,6 +2224,66 @@ ZGUI_API void zguiViewport_GetWorkSize(ImGuiViewport* viewport, float p[2]) {
     p[1] = sz.y;
 }
 
+//--------------------------------------------------------------------------------------------------
+//
+// Docking
+//
+//--------------------------------------------------------------------------------------------------
+ZGUI_API ImGuiID zguiDockSpace(const char* str_id, float size[2], ImGuiDockNodeFlags flags) {
+    return ImGui::DockSpace(ImGui::GetID(str_id), {size[0], size[1]}, flags);
+}
+
+ZGUI_API ImGuiID zguiDockSpaceOverViewport(const ImGuiViewport* viewport, ImGuiDockNodeFlags dockspace_flags) {
+    return ImGui::DockSpaceOverViewport(viewport, dockspace_flags);
+}
+
+
+//--------------------------------------------------------------------------------------------------
+//
+// DockBuilder (Unstable internal imgui API, subject to change, use at own risk)
+//
+//--------------------------------------------------------------------------------------------------
+ZGUI_API void zguiDockBuilderDockWindow(const char* window_name, ImGuiID node_id) {
+    ImGui::DockBuilderDockWindow(window_name, node_id);
+}
+
+ZGUI_API ImGuiID zguiDockBuilderAddNode(ImGuiID node_id, ImGuiDockNodeFlags flags) {
+    return ImGui::DockBuilderAddNode(node_id, flags);
+}
+
+ZGUI_API void zguiDockBuilderRemoveNode(ImGuiID node_id) {
+    ImGui::DockBuilderRemoveNode(node_id);
+}
+
+ZGUI_API void zguiDockBuilderSetNodePos(ImGuiID node_id, float pos[2]) {
+    ImGui::DockBuilderSetNodePos(node_id, {pos[0], pos[1]});
+}
+
+ZGUI_API void zguiDockBuilderSetNodeSize(ImGuiID node_id, float size[2]) {
+    ImGui::DockBuilderSetNodeSize(node_id, {size[0], size[1]});
+}
+
+ZGUI_API ImGuiID zguiDockBuilderSplitNode(
+    ImGuiID node_id,
+    ImGuiDir split_dir,
+    float size_ratio_for_node_at_dir,
+    ImGuiID* out_id_at_dir,
+    ImGuiID* out_id_at_opposite_dir
+) {
+    return ImGui::DockBuilderSplitNode(
+        node_id,
+        split_dir,
+        size_ratio_for_node_at_dir,
+        out_id_at_dir,
+        out_id_at_opposite_dir
+    );
+}
+
+ZGUI_API void zguiDockBuilderFinish(ImGuiID node_id) {
+    ImGui::DockBuilderFinish(node_id);
+}
+
+
 #if ZGUI_IMPLOT
 //--------------------------------------------------------------------------------------------------
 //
@@ -2473,3 +2549,156 @@ ZGUI_API void zguiPlot_PlotText(
 
 //--------------------------------------------------------------------------------------------------
 } /* extern "C" */
+
+
+#if ZGUI_TE
+//--------------------------------------------------------------------------------------------------
+//
+// ImGUI Test Engine
+//
+//--------------------------------------------------------------------------------------------------
+extern "C"
+{
+
+    ZGUI_API void *zguiTe_CreateContext(void)
+    {
+        ImGuiTestEngine *e = ImGuiTestEngine_CreateContext();
+
+        ImGuiTestEngine_Start(e, ImGui::GetCurrentContext());
+        ImGuiTestEngine_InstallDefaultCrashHandler();
+
+        return e;
+    }
+
+    ZGUI_API void zguiTe_DestroyContext(ImGuiTestEngine *engine)
+    {
+        ImGuiTestEngine_DestroyContext(engine);
+    }
+
+    ZGUI_API void zguiTe_EngineSetRunSpeed(ImGuiTestEngine *engine, ImGuiTestRunSpeed speed)
+    {
+        ImGuiTestEngine_GetIO(engine).ConfigRunSpeed = speed;
+    }
+
+    ZGUI_API void zguiTe_EngineExportJunitResult(ImGuiTestEngine *engine, const char *filename)
+    {
+        ImGuiTestEngine_GetIO(engine).ExportResultsFilename = filename;
+        ImGuiTestEngine_GetIO(engine).ExportResultsFormat = ImGuiTestEngineExportFormat_JUnitXml;
+    }
+
+    ZGUI_API void zguiTe_TryAbortEngine(ImGuiTestEngine *engine)
+    {
+        ImGuiTestEngine_TryAbortEngine(engine);
+    }
+
+    ZGUI_API void zguiTe_Stop(ImGuiTestEngine *engine)
+    {
+        ImGuiTestEngine_Stop(engine);
+    }
+
+    ZGUI_API void zguiTe_PostSwap(ImGuiTestEngine *engine)
+    {
+        ImGuiTestEngine_PostSwap(engine);
+    }
+
+    ZGUI_API bool zguiTe_IsTestQueueEmpty(ImGuiTestEngine *engine)
+    {
+        return ImGuiTestEngine_IsTestQueueEmpty(engine);
+    }
+
+    ZGUI_API void zguiTe_GetResult(ImGuiTestEngine *engine, int *count_tested, int *count_success)
+    {
+        int ct = 0;
+        int cs = 0;
+        ImGuiTestEngine_GetResult(engine, ct, cs);
+        *count_tested = ct;
+        *count_success = cs;
+    }
+
+    ZGUI_API void zguiTe_PrintResultSummary(ImGuiTestEngine *engine)
+    {
+        ImGuiTestEngine_PrintResultSummary(engine);
+    }
+
+    ZGUI_API void zguiTe_QueueTests(ImGuiTestEngine *engine, ImGuiTestGroup group, const char *filter_str, ImGuiTestRunFlags run_flags)
+    {
+        ImGuiTestEngine_QueueTests(engine, group, filter_str, run_flags);
+    }
+
+    ZGUI_API void zguiTe_ShowTestEngineWindows(ImGuiTestEngine *engine, bool *p_open)
+    {
+        ImGuiTestEngine_ShowTestEngineWindows(engine, p_open);
+    }
+
+    ZGUI_API void *zguiTe_RegisterTest(ImGuiTestEngine *engine, const char *category, const char *name, const char *src_file, int src_line, ImGuiTestGuiFunc *gui_fce, ImGuiTestTestFunc *gui_test_fce)
+    {
+        auto t = ImGuiTestEngine_RegisterTest(engine, category, name, src_file, src_line);
+        t->GuiFunc = gui_fce;
+        t->TestFunc = gui_test_fce;
+        return t;
+    }
+
+    ZGUI_API bool zguiTe_Check(const char *file, const char *func, int line, ImGuiTestCheckFlags flags, bool result, const char *expr)
+    {
+        return ImGuiTestEngine_Check(file, func, line, flags, result, expr);
+    }
+
+    // CONTEXT
+
+    ZGUI_API void zguiTe_ContextSetRef(ImGuiTestContext *ctx, const char *ref)
+    {
+        ctx->SetRef(ref);
+    }
+
+    ZGUI_API void zguiTe_ContextWindowFocus(ImGuiTestContext *ctx, const char *ref)
+    {
+        ctx->WindowFocus(ref);
+    }
+
+    ZGUI_API void zguiTe_ContextItemAction(ImGuiTestContext *ctx, ImGuiTestAction action, const char *ref, ImGuiTestOpFlags flags = 0, void *action_arg = NULL)
+    {
+        ctx->ItemAction(action, ref, flags, action_arg);
+    }
+
+    ZGUI_API void zguiTe_ContextItemInputStrValue(ImGuiTestContext *ctx, const char *ref, const char *value)
+    {
+        ctx->ItemInputValue(ref, value);
+    }
+
+    ZGUI_API void zguiTe_ContextItemInputIntValue(ImGuiTestContext *ctx, const char *ref, int value)
+    {
+        ctx->ItemInputValue(ref, value);
+    }
+
+    ZGUI_API void zguiTe_ContextItemInputFloatValue(ImGuiTestContext *ctx, const char *ref, float value)
+    {
+        ctx->ItemInputValue(ref, value);
+    }
+
+    ZGUI_API void zguiTe_ContextYield(ImGuiTestContext *ctx, int frame_count)
+    {
+        ctx->Yield(frame_count);
+    }
+
+    ZGUI_API void zguiTe_ContextMenuAction(ImGuiTestContext *ctx, ImGuiTestAction action, const char *ref)
+    {
+        ctx->MenuAction(action, ref);
+    }
+
+    ZGUI_API void zguiTe_ContextDragAndDrop(ImGuiTestContext *ctx, const char *ref_src, const char *ref_dst, ImGuiMouseButton button)
+    {
+        ctx->ItemDragAndDrop(ref_src, ref_dst, button);
+    }
+
+    ZGUI_API void zguiTe_ContextKeyDown(ImGuiTestContext *ctx, ImGuiKeyChord key_chord)
+    {
+        ctx->KeyDown(key_chord);
+    }
+
+    ZGUI_API void zguiTe_ContextKeyUp(ImGuiTestContext *ctx, ImGuiKeyChord key_chord)
+    {
+        ctx->KeyUp(key_chord);
+    }
+
+} /* extern "C" */
+#endif

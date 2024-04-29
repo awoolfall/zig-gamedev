@@ -650,8 +650,8 @@ pub const iter_t = extern struct {
     interrupted_by: entity_t,
     priv: iter_private_t,
     next: iter_next_action_t,
-    callback: *const fn (it: *iter_t) callconv(.C) void, // TODO: Compiler bug. Should be `iter_action_t`.
-    set_var: *const fn (it: *iter_t) callconv(.C) void, // TODO: Compiler bug. Should be `iter_action_t`.
+    callback: iter_action_t,
+    set_var: iter_action_t,
     fini: iter_fini_action_t,
     chain_it: ?*iter_t,
 
@@ -968,7 +968,7 @@ const EcsAllocator = struct {
 fn flecs_abort() callconv(.C) noreturn {
     std.debug.dumpCurrentStackTrace(@returnAddress());
     @breakpoint();
-    std.os.exit(1);
+    std.posix.exit(1);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1062,14 +1062,14 @@ pub fn fini(world: *world_t) i32 {
     assert(num_worlds == 1);
     num_worlds -= 1;
 
+    const fini_result = ecs_fini(world);
+
     var it = component_ids_hm.iterator();
     while (it.next()) |kv| {
         const ptr = kv.key_ptr.*;
         ptr.* = 0;
     }
     component_ids_hm.clearRetainingCapacity();
-
-    const fini_result = ecs_fini(world);
 
     if (num_worlds == 0) {
         _ = EcsAllocator.gpa.?.deinit();
@@ -2253,6 +2253,31 @@ extern fn ecs_value_init_w_type_info(world: *const world_t, ti: *const type_info
 /// `pub fn progress(world: *world_t, delta_time: ftime_t) bool`
 pub const progress = ecs_progress;
 extern fn ecs_progress(world: *world_t, delta_time: ftime_t) bool;
+
+/// `pub fn set_time_scale(world: *world_t, scale: ftime_t) void`
+pub const set_time_scale = ecs_set_time_scale;
+extern fn ecs_set_time_scale(world: *world_t, scale: ftime_t) void;
+
+/// `pub fn reset_clock(world: *world_t) void`
+pub const reset_clock = ecs_reset_clock;
+extern fn ecs_reset_clock(world: *world_t) void;
+
+/// `pub fn ecs_run_pipeline(world: *world_t, pipeline: entity_t, delta_time: ftime_t) void`
+pub const run_pipeline = ecs_run_pipeline;
+extern fn ecs_run_pipeline(world: *world_t, pipeline: entity_t, delta_time: ftime_t) void;
+
+/// `pub fn ecs_set_threads(world: *world_t, threads: i32) void`
+pub const set_threads = ecs_set_threads;
+extern fn ecs_set_threads(world: *world_t, threads: i32) void;
+
+/// `pub fn ecs_set_task_threads(world: *world_t, task_threads: i32) void`
+pub const set_task_threads = ecs_set_task_threads;
+extern fn ecs_set_task_threads(world: *world_t, task_threads: i32) void;
+
+/// `pub fn ecs_using_task_threads(world: *world_t) bool`
+pub const using_task_threads = ecs_using_task_threads;
+extern fn ecs_using_task_threads(world: *world_t) bool;
+
 //--------------------------------------------------------------------------------------------------
 //
 // Declarative functions (ECS_* macros in flecs)
@@ -2283,6 +2308,16 @@ pub fn COMPONENT(world: *world_t, comptime T: type) void {
         .type = .{
             .alignment = @alignOf(T),
             .size = @sizeOf(T),
+            .hooks = .{
+                .dtor = switch (@typeInfo(T)) {
+                    .Struct => if (@hasDecl(T, "dtor")) struct {
+                        pub fn dtor(ptr: *anyopaque, _: i32, _: *const type_info_t) callconv(.C) void {
+                            T.dtor(@as(*T, @alignCast(@ptrCast(ptr))).*);
+                        }
+                    }.dtor else null,
+                    else => null,
+                },
+            },
         },
     });
 }
@@ -2327,6 +2362,108 @@ pub fn OBSERVER(
 
     observer_desc.entity = entity_init(world, &entity_desc);
     _ = observer_init(world, observer_desc);
+}
+
+/// Implements a flecs system from function parameters.
+/// For instance, the function below
+/// fn move_system(positions: []Position, velocities: []const Velocity) void {
+///     for (positions, velocities) |*p, *v| {
+///         p.x += v.x;
+///         p.y += v.y;
+///     }
+/// }
+/// Would return the following implementation
+/// fn exec(it: *ecs.iter_t) callconv(.C) void {
+///     const c1 = ecs.field(it, Position, 1).?;
+///     const c2 = ecs.field(it, Velocity, 2).?;
+///     move_system(c1, c2);//probably inlined
+// }
+fn SystemImpl(comptime fn_system: anytype) type {
+    const fn_type = @typeInfo(@TypeOf(fn_system));
+    if (fn_type.Fn.params.len == 0) {
+        @compileError("System need at least one parameter");
+    }
+
+    return struct {
+        fn exec(it: *iter_t) callconv(.C) void {
+            const ArgsTupleType = std.meta.ArgsTuple(@TypeOf(fn_system));
+            var args_tuple: ArgsTupleType = undefined;
+
+            const has_it_param = fn_type.Fn.params[0].type == *iter_t;
+            if (has_it_param) {
+                args_tuple[0] = it;
+            }
+
+            const start_index = if (has_it_param) 1 else 0;
+
+            inline for (start_index..fn_type.Fn.params.len) |i| {
+                const p = fn_type.Fn.params[i];
+                args_tuple[i] = field(it, @typeInfo(p.type.?).Pointer.child, i + 1 - start_index).?;
+            }
+
+            //NOTE: .always_inline seems ok, but unsure. Replace to .auto if it breaks
+            _ = @call(.always_inline, fn_system, args_tuple);
+        }
+    };
+}
+
+/// Creates system_desc_t from function parameters
+pub fn SYSTEM_DESC(comptime fn_system: anytype) system_desc_t {
+    const system_struct = SystemImpl(fn_system);
+
+    var system_desc = system_desc_t{};
+    system_desc.callback = system_struct.exec;
+
+    const fn_type = @typeInfo(@TypeOf(fn_system)).Fn;
+    const has_it_param = fn_type.params[0].type == *iter_t;
+    const start_index = if (has_it_param) 1 else 0;
+    inline for (start_index..fn_type.params.len) |i| {
+        const p = fn_type.params[i];
+        const param_type_info = @typeInfo(p.type.?).Pointer;
+        const inout = if (param_type_info.is_const) .In else .InOut;
+        system_desc.query.filter.terms[i - start_index] = .{ .id = id(param_type_info.child), .inout = inout };
+    }
+
+    return system_desc;
+}
+
+/// Creates system_desc_t from function parameters.
+/// Accepts aditional filter terms
+pub fn SYSTEM_DESC_WITH_FILTERS(comptime fn_system: anytype, filters: []const term_t) system_desc_t {
+    const fn_type = @typeInfo(@TypeOf(fn_system)).Fn;
+    var system_desc = SYSTEM_DESC(fn_system);
+
+    const has_it_param = fn_type.params[0].type == *iter_t;
+    const start_index = if (has_it_param) 1 else 0;
+    for (filters, 0..) |t, i| {
+        system_desc.query.filter.terms[i + fn_type.params.len - start_index] = t;
+    }
+
+    return system_desc;
+}
+
+/// Creates a system description and adds it to the world, from function parameters
+pub fn ADD_SYSTEM(
+    world: *world_t,
+    name: [*:0]const u8,
+    phase: entity_t,
+    comptime fn_system: anytype,
+) void {
+    var desc = SYSTEM_DESC(fn_system);
+    SYSTEM(world, name, phase, &desc);
+}
+
+/// Creates a system description and adds it to the world, from function parameters
+/// Accepts aditional filter terms
+pub fn ADD_SYSTEM_WITH_FILTERS(
+    world: *world_t,
+    name: [*:0]const u8,
+    phase: entity_t,
+    comptime fn_system: anytype,
+    filters: []const term_t,
+) void {
+    var desc = SYSTEM_DESC_WITH_FILTERS(fn_system, filters);
+    SYSTEM(world, name, phase, &desc);
 }
 
 pub fn new_entity(world: *world_t, name: [*:0]const u8) entity_t {
@@ -2432,6 +2569,10 @@ pub fn override(world: *world_t, entity: entity_t, comptime T: type) void {
     ecs_override_id(world, entity, id(T));
 }
 
+pub fn modified(world: *world_t, entity: entity_t, comptime T: type) void {
+    ecs_modified_id(world, entity, id(T));
+}
+
 pub fn field(it: *iter_t, comptime T: type, index: i32) ?[]T {
     if (ecs_field_w_size(it, @sizeOf(T), index)) |anyptr| {
         const ptr = @as([*]T, @ptrCast(@alignCast(anyptr)));
@@ -2452,6 +2593,30 @@ pub fn cast(comptime T: type, val: ?*const anyopaque) *const T {
 
 pub fn cast_mut(comptime T: type, val: ?*anyopaque) *T {
     return @as(*T, @ptrCast(@alignCast(val)));
+}
+
+pub fn singleton_set(world: *world_t, comptime T: type, val: T) entity_t {
+    return set(world, id(T), T, val);
+}
+
+pub fn singleton_get(world: *world_t, comptime T: type) ?*const T {
+    return get(world, id(T), T);
+}
+
+pub fn singleton_get_mut(world: *world_t, comptime T: type) ?*T {
+    return get_mut(world, id(T), T);
+}
+
+pub fn singleton_add(world: *world_t, comptime T: type) void {
+    add(world, id(T), T);
+}
+
+pub fn singleton_remove(world: *world_t, comptime T: type) void {
+    remove(world, id(T), T);
+}
+
+pub fn singleton_modified(world: *world_t, comptime T: type) void {
+    modified(world, id(T), T);
 }
 
 // Entity Names
@@ -2488,6 +2653,14 @@ fn PerTypeGlobalVar(comptime in_type: type) type {
 
     return struct {
         var id: id_t = 0;
+
+        // Ensure that a unique struct type is generated for each unique `in_type`. See
+        // https://github.com/ziglang/zig/issues/18816
+        comptime {
+            // We cannot just do `_ = in_type`
+            // https://github.com/ziglang/zig/issues/19274
+            _ = @alignOf(in_type);
+        }
     };
 }
 inline fn perTypeGlobalVarPtr(comptime T: type) *id_t {
@@ -2628,6 +2801,17 @@ comptime {
 // ADDONS
 //
 //--------------------------------------------------------------------------------------------------
+
+// ecs_new_w_pair
+pub fn new_w_pair(world: *world_t, first: entity_t, second: entity_t) entity_t {
+    const pair_id = make_pair(first, second);
+    return new_w_id(world, pair_id);
+}
+
+// ecs_delete_children
+pub fn delete_children(world: *world_t, parent: entity_t) void {
+    delete_with(world, make_pair(ChildOf, parent));
+}
 
 //--------------------------------------------------------------------------------------------------
 //

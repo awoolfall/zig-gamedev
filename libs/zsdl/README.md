@@ -1,34 +1,35 @@
-# zsdl v0.0.1 - bindings for SDL2 (wip)
+# zsdl v0.1.0 - bindings for SDL2 and SDL3 (wip)
 
 ## Getting started
 
-Copy `zsdl` folder to a `libs` subdirectory of the root of your project and add the following to your `build.zig.zon` .dependencies:
+Copy `zsdl` folder to a subdirectory of your project and add the following to your `build.zig.zon` .dependencies:
 ```zig
-    .zsdl = .{ .path = "libs/zsdl" },
+    .zsdl = .{ .path = "path/to/local/zsdl" },
 ```
 
 Then in your `build.zig` add:
 
 ```zig
-const std = @import("std");
-const zsdl = @import("zsdl");
+pub fn build(b: *std.Build) !void {
+    const exe = b.addExecutable(.{ ... });
 
-pub fn build(b: *std.Build) void {
-    ...
-    const optimize = b.standardOptimizeOption(.{});
-    const target = b.standardTargetOptions(.{});
+    const zsdl = b.dependency("zsdl", .{});
+    const zsdl_path = zsdl.path("").getPath(b);
 
-    const zsdl_pkg = zsdl.package(b, target, optimize, .{});
+    exe.root_module.addImport("zsdl2", zsdl.module("zsdl2"));
 
-    zsdl_pkg.link(exe);
+    try @import("zsdl").addLibraryPathsTo(exe, zsdl_path);
+    @import("zsdl").link_SDL2(exe);
+
+    try @import("zsdl").install_sdl2(&exe.step, options.target.result, .bin, zsdl_path);
 }
 ```
 
-Now in your code you may import and use `zsdl`:
+Now in your code you may import and use `zsdl2`:
 
 ```zig
 const std = @import("std");
-const sdl = @import("zsdl");
+const sdl = @import("zsdl2");
 
 pub fn main() !void {
     ...

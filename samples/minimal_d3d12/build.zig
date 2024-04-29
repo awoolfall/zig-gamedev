@@ -11,16 +11,24 @@ pub fn build(b: *std.Build, options: Options) *std.Build.Step.Compile {
         .optimize = options.optimize,
     });
 
-    const zwin32_pkg = @import("../../build.zig").zwin32_pkg;
+    @import("system_sdk").addLibraryPathsTo(exe);
 
-    zwin32_pkg.link(exe, .{ .d3d12 = true });
+    const zwin32 = b.dependency("zwin32", .{
+        .target = options.target,
+    });
+    exe.root_module.addImport("zwin32", zwin32.module("root"));
 
     if (builtin.os.tag == .windows or builtin.os.tag == .linux) {
         const dxc_step = buildShaders(b);
         exe.step.dependOn(dxc_step);
     }
 
+    // This is needed to export symbols from an .exe file.
+    // We export D3D12SDKVersion and D3D12SDKPath symbols which
+    // is required by DirectX 12 Agility SDK.
     exe.rdynamic = true;
+
+    @import("zwin32").install_d3d12(&exe.step, .bin, "libs/zwin32") catch unreachable;
 
     return exe;
 }

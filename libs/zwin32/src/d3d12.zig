@@ -57,6 +57,8 @@ pub const RESOURCE_BARRIER_ALL_SUBRESOURCES = 0xffff_ffff;
 
 pub const SHADER_IDENTIFIER_SIZE_IN_BYTES = 32;
 
+pub const CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT = 256;
+
 pub const GPU_VIRTUAL_ADDRESS = UINT64;
 
 pub const PRIMITIVE_TOPOLOGY = d3d.PRIMITIVE_TOPOLOGY;
@@ -805,6 +807,13 @@ pub const SHADER_BYTECODE = extern struct {
     pub inline fn initZero() SHADER_BYTECODE {
         return std.mem.zeroes(@This());
     }
+
+    pub inline fn init(bytecode: []const u8) SHADER_BYTECODE {
+        return .{
+            .pShaderBytecode = bytecode.ptr,
+            .BytecodeLength = bytecode.len,
+        };
+    }
 };
 
 pub const SO_DECLARATION_ENTRY = extern struct {
@@ -895,7 +904,7 @@ pub const RENDER_TARGET_BLEND_DESC = extern struct {
     DestBlendAlpha: BLEND,
     BlendOpAlpha: BLEND_OP,
     LogicOp: LOGIC_OP,
-    RenderTargetWriteMask: UINT8,
+    RenderTargetWriteMask: COLOR_WRITE_ENABLE,
 
     pub fn initDefault() RENDER_TARGET_BLEND_DESC {
         var v = std.mem.zeroes(@This());
@@ -909,7 +918,7 @@ pub const RENDER_TARGET_BLEND_DESC = extern struct {
             .DestBlendAlpha = .ZERO,
             .BlendOpAlpha = .ADD,
             .LogicOp = .NOOP,
-            .RenderTargetWriteMask = 0x0,
+            .RenderTargetWriteMask = COLOR_WRITE_ENABLE.ALL,
         };
         return v;
     }
@@ -1084,6 +1093,13 @@ pub const INPUT_LAYOUT_DESC = extern struct {
 
     pub inline fn initZero() INPUT_LAYOUT_DESC {
         return std.mem.zeroes(@This());
+    }
+
+    pub inline fn init(elements: []const INPUT_ELEMENT_DESC) INPUT_LAYOUT_DESC {
+        return .{
+            .pInputElementDescs = elements.ptr,
+            .NumElements = @intCast(elements.len),
+        };
     }
 };
 

@@ -12,17 +12,31 @@ pub fn build(b: *std.Build, options: Options) *std.Build.Step.Compile {
         .optimize = options.optimize,
     });
 
-    const zwin32_pkg = @import("../../build.zig").zwin32_pkg;
-    const zd3d12_pkg = @import("../../build.zig").zd3d12_pkg;
-    const common_pkg = @import("../../build.zig").common_pkg;
+    @import("system_sdk").addLibraryPathsTo(exe);
 
-    zwin32_pkg.link(exe, .{ .d3d12 = true, .directml = true });
-    common_pkg.link(exe);
-    zd3d12_pkg.link(exe);
+    const zwin32 = b.dependency("zwin32", .{
+        .target = options.target,
+    });
+    const zwin32_module = zwin32.module("root");
+    exe.root_module.addImport("zwin32", zwin32_module);
+
+    const zd3d12 = b.dependency("zd3d12", .{
+        .target = options.target,
+        .debug_layer = options.zd3d12_enable_debug_layer,
+        .gbv = options.zd3d12_enable_gbv,
+    });
+    const zd3d12_module = zd3d12.module("root");
+    exe.root_module.addImport("zd3d12", zd3d12_module);
+
+    @import("../common/build.zig").link(exe, .{
+        .zwin32 = zwin32_module,
+        .zd3d12 = zd3d12_module,
+    });
 
     const exe_options = b.addOptions();
     exe.root_module.addOptions("build_options", exe_options);
     exe_options.addOption([]const u8, "content_dir", content_dir);
+    exe_options.addOption(bool, "zd3d12_enable_debug_layer", options.zd3d12_enable_debug_layer);
 
     const install_content_step = b.addInstallDirectory(.{
         .source_dir = .{ .path = thisDir() ++ "/" ++ content_dir },
@@ -41,6 +55,8 @@ pub fn build(b: *std.Build, options: Options) *std.Build.Step.Compile {
     // is required by DirectX 12 Agility SDK.
     exe.rdynamic = true;
 
+    @import("zwin32").install_directml(&exe.step, .bin, "libs/zwin32") catch unreachable;
+
     return exe;
 }
 
@@ -53,7 +69,7 @@ fn buildShaders(b: *std.Build) *std.Build.Step {
     makeDxcCmd(
         b,
         dxc_step,
-        "../../libs/common/src/hlsl/common.hlsl",
+        "../common/src/hlsl/common.hlsl",
         "vsImGui",
         "imgui.vs.cso",
         "vs",
@@ -62,7 +78,7 @@ fn buildShaders(b: *std.Build) *std.Build.Step {
     makeDxcCmd(
         b,
         dxc_step,
-        "../../libs/common/src/hlsl/common.hlsl",
+        "../common/src/hlsl/common.hlsl",
         "psImGui",
         "imgui.ps.cso",
         "ps",

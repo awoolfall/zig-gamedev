@@ -14,12 +14,11 @@ const c = common.c;
 const vm = common.vectormath;
 const GuiRenderer = common.GuiRenderer;
 
-const enable_dx_debug = @import("zd3d12_options").enable_debug_layer;
-
 pub export const D3D12SDKVersion: u32 = 610;
 pub export const D3D12SDKPath: [*:0]const u8 = ".\\d3d12\\";
 
-const content_dir = @import("build_options").content_dir;
+const build_options = @import("build_options");
+const content_dir = build_options.content_dir;
 
 const window_name = "zig-gamedev: DirectML convolution test";
 const window_width = 1800;
@@ -94,39 +93,29 @@ fn init(allocator: std.mem.Allocator) !DemoState {
         var pso_desc = d3d12.GRAPHICS_PIPELINE_STATE_DESC.initDefault();
         pso_desc.RTVFormats[0] = .R8G8B8A8_UNORM;
         pso_desc.NumRenderTargets = 1;
-        pso_desc.BlendState.RenderTarget[0].RenderTargetWriteMask = 0xf;
         pso_desc.PrimitiveTopologyType = .TRIANGLE;
         pso_desc.DepthStencilState.DepthEnable = w32.FALSE;
+        pso_desc.VS = d3d12.SHADER_BYTECODE.init(try common.readContentDirFileAlloc(arena_allocator, content_dir, "shaders/draw_texture.vs.cso", null));
+        pso_desc.PS = d3d12.SHADER_BYTECODE.init(try common.readContentDirFileAlloc(arena_allocator, content_dir, "shaders/draw_texture.ps.cso", null));
 
-        break :blk gctx.createGraphicsShaderPipeline(
-            arena_allocator,
-            &pso_desc,
-            content_dir ++ "shaders/draw_texture.vs.cso",
-            content_dir ++ "shaders/draw_texture.ps.cso",
-        );
+        break :blk gctx.createGraphicsShaderPipeline(&pso_desc);
     };
 
     const texture_to_buffer_pso = blk: {
         var desc = d3d12.COMPUTE_PIPELINE_STATE_DESC.initDefault();
-        break :blk gctx.createComputeShaderPipeline(
-            arena_allocator,
-            &desc,
-            content_dir ++ "shaders/texture_to_buffer.cs.cso",
-        );
+        desc.CS = d3d12.SHADER_BYTECODE.init(try common.readContentDirFileAlloc(arena_allocator, content_dir, "shaders/texture_to_buffer.cs.cso", null));
+        break :blk gctx.createComputeShaderPipeline(&desc);
     };
     const buffer_to_texture_pso = blk: {
         var desc = d3d12.COMPUTE_PIPELINE_STATE_DESC.initDefault();
-        break :blk gctx.createComputeShaderPipeline(
-            arena_allocator,
-            &desc,
-            content_dir ++ "shaders/buffer_to_texture.cs.cso",
-        );
+        desc.CS = d3d12.SHADER_BYTECODE.init(try common.readContentDirFileAlloc(arena_allocator, content_dir, "shaders/buffer_to_texture.cs.cso", null));
+        break :blk gctx.createComputeShaderPipeline(&desc);
     };
 
     var dml_device: *dml.IDevice1 = undefined;
     hrPanicOnFail(dml.createDevice(
         @as(*d3d12.IDevice, @ptrCast(gctx.device)),
-        .{ .DEBUG = enable_dx_debug },
+        .{ .DEBUG = build_options.zd3d12_enable_debug_layer },
         .@"4_1",
         &dml.IID_IDevice1,
         @as(*?*anyopaque, @ptrCast(&dml_device)),

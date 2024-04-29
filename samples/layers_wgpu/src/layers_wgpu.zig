@@ -96,8 +96,10 @@ pub fn main() !void {
     {
         var buffer: [1024]u8 = undefined;
         const path = std.fs.selfExeDirPath(buffer[0..]) catch ".";
-        std.os.chdir(path) catch {};
+        std.posix.chdir(path) catch {};
     }
+
+    zglfw.windowHintTyped(.client_api, .no_api);
 
     const window = try zglfw.Window.create(800, 800, window_title, null);
     defer window.destroy();

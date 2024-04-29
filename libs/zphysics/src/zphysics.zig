@@ -43,10 +43,6 @@ pub const debug_renderer_enabled = options.enable_debug_renderer;
 comptime {
     assert(if (debug_renderer_enabled) c.JPC_DEBUG_RENDERER == 1 else c.JPC_DEBUG_RENDERER == 0);
 }
-const debug_renderer_disabled_message: []const u8 =
-    \\is called, but debug rendering is not enabled for this build. To enable it, use the option {.enable_debug_renderer
-    \\ = true} when building zphysics. Otherwise, test if debug_renderer_enabled is true before calling.
-;
 
 const TempAllocator = opaque {};
 const JobSystem = opaque {};
@@ -988,7 +984,7 @@ pub const RayCastSettings = extern struct {
     }
 };
 
-pub const DebugRenderer = if (!debug_renderer_enabled) void else extern struct {
+pub const DebugRenderer = if (!debug_renderer_enabled) extern struct {} else extern struct {
     pub fn createSingleton(debug_renderer_impl: *anyopaque) !void {
         switch (@as(DebugRendererResult, @enumFromInt(c.JPC_CreateDebugRendererSingleton(debug_renderer_impl)))) {
             .success => {
@@ -1008,31 +1004,23 @@ pub const DebugRenderer = if (!debug_renderer_enabled) void else extern struct {
 
     pub fn destroySingleton() void {
         _ = c.JPC_DestroyDebugRendererSingleton(); // For Zig API, don't care if one actually existed, discard error.
+
     }
 
     pub fn createTriangleBatch(primitive_in: *const anyopaque) *TriangleBatch {
-        return @as(*TriangleBatch, @ptrCast(c.JPC_DebugRenderer_TriangleBatch_Create(primitive_in)));
+        return @ptrCast(c.JPC_DebugRenderer_TriangleBatch_Create(primitive_in));
     }
 
     pub fn getPrimitiveFromBatch(batch_in: *const TriangleBatch) *const Primitive {
-        // zig fmt: off
-        return @as(*const Primitive, @ptrCast(c.JPC_DebugRenderer_TriangleBatch_GetPrimitive(
-            @as(*const c.JPC_DebugRenderer_TriangleBatch, @ptrCast(batch_in))
-        )));
-        // zig fmt: on
+        return @ptrCast(c.JPC_DebugRenderer_TriangleBatch_GetPrimitive(@ptrCast(batch_in)));
     }
 
     pub fn createBodyDrawFilter(filter_func: BodyDrawFilterFunc) *BodyDrawFilter {
-        // zig fmt: off
-        return @as(
-            *BodyDrawFilter,
-            @ptrCast(c.JPC_BodyDrawFilter_Create(@as(c.JPC_BodyDrawFilterFunc, @ptrCast(filter_func))))
-        );
-        // zig fmt: on
+        return @ptrCast(c.JPC_BodyDrawFilter_Create(@ptrCast(filter_func)));
     }
 
     pub fn destroyBodyDrawFilter(filter: *BodyDrawFilter) void {
-        c.JPC_BodyDrawFilter_Destroy(@as(*c.JPC_BodyDrawFilter, @ptrCast(filter)));
+        c.JPC_BodyDrawFilter_Destroy(@ptrCast(filter));
     }
 
     pub fn Methods(comptime T: type) type {
@@ -1232,8 +1220,7 @@ pub const DebugRenderer = if (!debug_renderer_enabled) void else extern struct {
     };
     // zig fmt: on
 
-    pub const BodyDrawFilterFuncAlignment = @alignOf(c.JPC_BodyDrawFilterFunc);
-    pub const BodyDrawFilterFunc = *const fn (*const Body) align(BodyDrawFilterFuncAlignment) callconv(.C) bool;
+    pub const BodyDrawFilterFunc = *const fn (*const Body) callconv(.C) bool;
     pub const BodyDrawFilter = opaque {};
 
     pub const TriangleBatch = opaque {};
@@ -1491,45 +1478,31 @@ pub const PhysicsSystem = opaque {
         }
     }
 
-    pub fn drawBodies(
-        physics_system: *PhysicsSystem,
-        in_draw_settings: *const DebugRenderer.BodyDrawSettings,
-        in_draw_filter: ?*const DebugRenderer.BodyDrawFilter,
-    ) void {
-        if (debug_renderer_enabled) {
+    pub usingnamespace if (!debug_renderer_enabled) struct {} else struct {
+        pub fn drawBodies(
+            physics_system: *PhysicsSystem,
+            in_draw_settings: *const DebugRenderer.BodyDrawSettings,
+            in_draw_filter: ?*const DebugRenderer.BodyDrawFilter,
+        ) void {
             c.JPC_PhysicsSystem_DrawBodies(
                 @as(*c.JPC_PhysicsSystem, @ptrCast(physics_system)),
                 @as(*const c.JPC_BodyManager_DrawSettings, @ptrCast(in_draw_settings)),
                 @as(?*const c.JPC_BodyDrawFilter, @ptrCast(in_draw_filter)),
             );
-        } else {
-            @compileError("PhysicsSystem.drawBodies" ++ debug_renderer_disabled_message);
         }
-    }
 
-    pub fn drawConstraints(physics_system: *PhysicsSystem) void {
-        if (debug_renderer_enabled) {
+        pub fn drawConstraints(physics_system: *PhysicsSystem) void {
             c.JPC_PhysicsSystem_DrawConstraints(@as(*c.JPC_PhysicsSystem, @ptrCast(physics_system)));
-        } else {
-            @compileError("PhysicsSystem.drawConstraints" ++ debug_renderer_disabled_message);
         }
-    }
 
-    pub fn drawConstraintLimits(physics_system: *PhysicsSystem) void {
-        if (debug_renderer_enabled) {
+        pub fn drawConstraintLimits(physics_system: *PhysicsSystem) void {
             c.JPC_PhysicsSystem_DrawConstraintLimits(@as(*c.JPC_PhysicsSystem, @ptrCast(physics_system)));
-        } else {
-            @compileError("PhysicsSystem.drawConstraintLimits" ++ debug_renderer_disabled_message);
         }
-    }
 
-    pub fn drawConstraintReferenceFrame(physics_system: *PhysicsSystem) void {
-        if (debug_renderer_enabled) {
+        pub fn drawConstraintReferenceFrame(physics_system: *PhysicsSystem) void {
             c.JPC_PhysicsSystem_DrawConstraintReferenceFrame(@as(*c.JPC_PhysicsSystem, @ptrCast(physics_system)));
-        } else {
-            @compileError("PhysicsSystem.drawConstraintReferenceFrame" ++ debug_renderer_disabled_message);
         }
-    }
+    };
 
     pub fn getBodyIds(physics_system: *const PhysicsSystem, body_ids: *std.ArrayList(BodyId)) !void {
         try body_ids.ensureTotalCapacityPrecise(physics_system.getMaxBodies());
@@ -2127,10 +2100,10 @@ pub const Body = extern struct {
         return velocity;
     }
     pub fn setAngularVelocity(body: *Body, velocity: [3]f32) void {
-        c.JPC_Body_SetAnglularVelocity(@as(*c.JPC_Body, @ptrCast(body)), &velocity);
+        c.JPC_Body_SetAngularVelocity(@as(*c.JPC_Body, @ptrCast(body)), &velocity);
     }
     pub fn setAngularVelocityClamped(body: *Body, velocity: [3]f32) void {
-        c.JPC_Body_SetAnglularVelocityClamped(@as(*c.JPC_Body, @ptrCast(body)), &velocity);
+        c.JPC_Body_SetAngularVelocityClamped(@as(*c.JPC_Body, @ptrCast(body)), &velocity);
     }
 
     /// `point` is relative to the center of mass (com)
@@ -2962,7 +2935,7 @@ pub const TaperedCapsuleShapeSettings = opaque {
         );
     }
     pub fn setHalfHeight(capsule_shape_settings: *TaperedCapsuleShapeSettings, half_height: f32) void {
-        c.JPC_CapsuleShapeSettings_SetHalfHeight(
+        c.JPC_TaperedCapsuleShapeSettings_SetHalfHeight(
             @as(*c.JPC_TaperedCapsuleShapeSettings, @ptrCast(capsule_shape_settings)),
             half_height,
         );
@@ -3356,6 +3329,54 @@ pub const Shape = opaque {
 };
 //--------------------------------------------------------------------------------------------------
 //
+// ConvexHullShape (-> Shape)
+//
+//--------------------------------------------------------------------------------------------------
+pub const ConvexHullShape = opaque {
+    pub usingnamespace Shape.Methods(@This());
+
+    pub fn asConvexHullShape(shape: *const Shape) *const ConvexHullShape {
+        assert(shape.getSubType() == .convex_hull);
+        return @as(*const ConvexHullShape, @ptrCast(shape));
+    }
+    pub fn asConvexHullShapeMut(shape: *Shape) *ConvexHullShape {
+        assert(shape.getSubType() == .convex_hull);
+        return @as(*ConvexHullShape, @ptrCast(shape));
+    }
+
+    pub fn getNumPoints(shape: *const ConvexHullShape) u32 {
+        return c.JPC_ConvexHullShape_GetNumPoints(@as(*const c.JPC_ConvexHullShape, @ptrCast(shape)));
+    }
+    pub fn getPoint(shape: *const ConvexHullShape, in_point_index: u32) [3]f32 {
+        var point: [3]f32 = undefined;
+        c.JPC_ConvexHullShape_GetPoint(@as(*const c.JPC_ConvexHullShape, @ptrCast(shape)), in_point_index, &point);
+        return point;
+    }
+
+    pub fn getNumFaces(shape: *const ConvexHullShape) u32 {
+        return c.JPC_ConvexHullShape_GetNumFaces(@as(*const c.JPC_ConvexHullShape, @ptrCast(shape)));
+    }
+    pub fn getNumVerticesInFace(shape: *const ConvexHullShape, in_face_index: u32) u32 {
+        return c.JPC_ConvexHullShape_GetNumVerticesInFace(
+            @as(*const c.JPC_ConvexHullShape, @ptrCast(shape)),
+            in_face_index,
+        );
+    }
+
+    /// out_vertex_buffer points to memory owned by the caller.
+    /// If out_vertex_buffer.len is less than getNumVerticesInFace(in_face_index), not all vertices are returned.
+    /// The return value gives the number of vertices in the face, identical to getNumVerticesInFace(in_face_index).
+    pub fn getFaceVertices(shape: *const ConvexHullShape, in_face_index: u32, out_vertex_buffer: []u32) u32 {
+        return c.JPC_ConvexHullShape_GetFaceVertices(
+            @as(*const c.JPC_ConvexHullShape, @ptrCast(shape)),
+            in_face_index,
+            @as(u32, @intCast(out_vertex_buffer.len)),
+            out_vertex_buffer.ptr,
+        );
+    }
+};
+//--------------------------------------------------------------------------------------------------
+//
 // ConstraintSettings
 //
 //--------------------------------------------------------------------------------------------------
@@ -3594,6 +3615,10 @@ fn zphysicsFree(maybe_ptr: ?*anyopaque) callconv(.C) void {
 //
 //--------------------------------------------------------------------------------------------------
 const expect = std.testing.expect;
+
+test {
+    std.testing.refAllDeclsRecursive(@This());
+}
 
 extern fn JoltCTest_Basic1() u32;
 test "jolt_c.basic1" {
