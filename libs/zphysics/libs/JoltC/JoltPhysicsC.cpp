@@ -3093,6 +3093,12 @@ JPC_Character_RemoveFromPhysicsSystem(JPC_Character *in_character, bool in_lock_
     toJph(in_character)->RemoveFromPhysicsSystem(in_lock_bodies);
 }
 //--------------------------------------------------------------------------------------------------
+JPC_API JPC_BodyID
+JPC_Character_GetBodyID(const JPC_Character *in_character)
+{
+    return toJpc(toJph(in_character)->GetBodyID());
+}
+//--------------------------------------------------------------------------------------------------
 JPC_API void
 JPC_Character_GetPosition(const JPC_Character *in_character, JPC_Real out_position[3])
 {

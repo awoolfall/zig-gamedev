@@ -2426,6 +2426,10 @@ pub const Character = opaque {
         c.JPC_Character_RemoveFromPhysicsSystem(@as(*c.JPC_Character, @ptrCast(character)), args.lock_bodies);
     }
 
+    pub fn getBodyId(character: *Character) BodyId {
+        return c.JPC_Character_GetBodyID(@as(*c.JPC_Character, @ptrCast(character)));
+    }
+
     pub fn getPosition(character: *const Character) [3]Real {
         var position: [3]Real = undefined;
         c.JPC_Character_GetPosition(@as(*const c.JPC_Character, @ptrCast(character)), &position);
@@ -2496,7 +2500,7 @@ pub const CharacterVirtual = opaque {
         mWalkStairsStepUp: [4]f32 align(16) = [4]f32{0.0, 0.4, 0.0, 0.0},
         mWalkStairsMinStepForward: f32 = 0.02,
         mWalkStairsStepForwardTest: f32 = 0.15,
-        mWalkStairsCosAngleForwardContact: f32 = std.math.cos(std.math.degreesToRadians(f32, 75.0)),
+        mWalkStairsCosAngleForwardContact: f32 = std.math.cos(std.math.degreesToRadians(75.0)),
         mWalkStairsStepDownExtra: [4]f32 align(16) = [4]f32{0.0, 0.0, 0.0, 0.0},
     };
 

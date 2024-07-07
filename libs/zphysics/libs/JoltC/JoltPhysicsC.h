@@ -2148,6 +2148,9 @@ JPC_Character_AddToPhysicsSystem(JPC_Character *in_character, JPC_Activation in_
 JPC_API void
 JPC_Character_RemoveFromPhysicsSystem(JPC_Character *in_character, bool in_lock_bodies);
 
+JPC_API JPC_BodyID
+JPC_Character_GetBodyID(const JPC_Character *in_character);
+
 JPC_API void
 JPC_Character_GetPosition(const JPC_Character *in_character, JPC_Real out_position[3]);
 
