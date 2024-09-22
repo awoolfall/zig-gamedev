@@ -204,6 +204,40 @@ pub const DEPTH_STENCIL_VIEW_DESC = extern struct {
     },
 };
 
+pub const DEPTH_STENCIL_DESC = extern struct {
+    DepthEnable: BOOL,
+    DepthWriteMask: DEPTH_WRITE_MASK,
+    DepthFunc: COMPARISON_FUNC,
+    StencilEnable: BOOL,
+    StencilReadMask: UINT8,
+    StencilWriteMask: UINT8,
+    FrontFace: DEPTH_STENCILOP_DESC,
+    BackFace: DEPTH_STENCILOP_DESC,
+};
+
+pub const DEPTH_WRITE_MASK = enum(UINT) {
+    ZERO = 0,
+    ALL = 1,
+};
+
+pub const DEPTH_STENCILOP_DESC = extern struct {
+    StencilFailOp: STENCIL_OP,
+    StencilDepthFailOp: STENCIL_OP,
+    StencilPassOp: STENCIL_OP,
+    StencilFunc: COMPARISON_FUNC,
+};
+
+pub const STENCIL_OP = enum(UINT) {
+    KEEP = 1,
+    ZERO = 2,
+    REPLACE = 3,
+    INCR_SAT = 4,
+    DECR_SAT = 5,
+    INVERT = 6,
+    INCR = 7,
+    DECR = 8,
+};
+
 pub const CLEAR_FLAG = packed struct(UINT) {
     CLEAR_DEPTH: bool = false,
     CLEAR_STENCIL: bool = false,
@@ -875,6 +909,17 @@ pub const IDeviceContext = extern struct {
                     SampleMask,
                 );
             }
+            pub inline fn OMSetDepthStencilState(
+                self: *T,
+                pDepthStencilState: ?*IDepthStencilState,
+                StencilRef: UINT,
+            ) void {
+                @as(*const IDeviceContext.VTable, @ptrCast(self.__v)).OMSetDepthStencilState(
+                    @as(*IDeviceContext, @ptrCast(self)),
+                    pDepthStencilState,
+                    StencilRef,
+                );
+            }
             pub inline fn RSSetState(self: *T, pRasterizerState: ?*IRasterizerState) void {
                 @as(*const IDeviceContext.VTable, @ptrCast(self.__v))
                     .RSSetState(@as(*IDeviceContext, @ptrCast(self)), pRasterizerState);
@@ -1037,7 +1082,7 @@ pub const IDeviceContext = extern struct {
             ?*const [4]FLOAT,
             UINT,
         ) callconv(WINAPI) void,
-        OMSetDepthStencilState: *anyopaque,
+        OMSetDepthStencilState: *const fn (*T, ?*IDepthStencilState, UINT) callconv(WINAPI) void,
         SOSetTargets: *anyopaque,
         DrawAuto: *anyopaque,
         DrawIndexedInstancedIndirect: *anyopaque,
@@ -1194,6 +1239,17 @@ pub const IDevice = extern struct {
                     ppDepthStencilView
                 );
             }
+            pub inline fn CreateDepthStencilState(
+                self: *T,
+                pDepthStencilDesc: *const DEPTH_STENCIL_DESC,
+                ppDepthStencilState: *?*IDepthStencilState,
+            ) HRESULT {
+                return @as(*const IDevice.VTable, @ptrCast(self.__v)).CreateDepthStencilState(
+                    @as(*IDevice, @ptrCast(self)),
+                    pDepthStencilDesc,
+                    ppDepthStencilState,
+                );
+            }
             pub inline fn CreateInputLayout(
                 self: *T,
                 pInputElementDescs: ?[*]const INPUT_ELEMENT_DESC,
@@ -1343,7 +1399,11 @@ pub const IDevice = extern struct {
             *const BLEND_DESC,
             ?*?*IBlendState,
         ) callconv(WINAPI) HRESULT,
-        CreateDepthStencilState: *anyopaque,
+        CreateDepthStencilState: *const fn (
+            *T,
+            *const DEPTH_STENCIL_DESC,
+            *?*IDepthStencilState,
+        ) callconv(WINAPI) HRESULT,
         CreateRasterizerState: *const fn (
             *T,
             *const RASTERIZER_DESC,
@@ -1426,6 +1486,24 @@ pub const IDepthStencilView = extern struct {
 
     pub const VTable = extern struct {
         base: IView.VTable,
+        GetDesc: *anyopaque,
+    };
+};
+
+pub const IID_IDepthStencilState = GUID.parse("{03823efb-8d8f-4e1c-9aa2-f64bb2cbfdf1}");
+pub const IDepthStencilState = extern struct {
+    __v: *const VTable,
+
+    pub usingnamespace Methods(@This());
+
+    pub fn Methods(comptime T: type) type {
+        return extern struct {
+            pub usingnamespace IDeviceChild.Methods(T);
+        };
+    }
+
+    pub const VTable = extern struct {
+        base: IDeviceChild.VTable,
         GetDesc: *anyopaque,
     };
 };
