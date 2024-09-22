@@ -936,6 +936,10 @@ pub const IDeviceContext = extern struct {
                 @as(*const IDeviceContext.VTable, @ptrCast(self.__v))
                     .RSSetScissorRects(@as(*IDeviceContext, @ptrCast(self)), NumRects, pRects);
             }
+            pub inline fn CopyResource(self: *T, pDstResource: *IResource, pSrcResource: *IResource) void {
+                @as(*const IDeviceContext.VTable, @ptrCast(self.__v))
+                    .CopyResource(@as(*IDeviceContext, @ptrCast(self)), pDstResource, pSrcResource);
+            }
             pub inline fn ClearRenderTargetView(
                 self: *T,
                 pRenderTargetView: *IRenderTargetView,
@@ -1093,7 +1097,7 @@ pub const IDeviceContext = extern struct {
         RSSetViewports: *const fn (*T, UINT, [*]const VIEWPORT) callconv(WINAPI) void,
         RSSetScissorRects: *const fn (*T, UINT, ?[*]const RECT) callconv(WINAPI) void,
         CopySubresourceRegion: *anyopaque,
-        CopyResource: *anyopaque,
+        CopyResource: *const fn (*T, *IResource, *IResource) callconv(WINAPI) void,
         UpdateSubresource: *const fn (*T, *IResource, UINT, ?*BOX, *anyopaque, UINT, UINT) callconv(WINAPI) void,
         CopyStructureCount: *anyopaque,
         ClearRenderTargetView: *const fn (*T, *IRenderTargetView, *const [4]FLOAT) callconv(WINAPI) void,
