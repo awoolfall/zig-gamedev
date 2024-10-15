@@ -2525,7 +2525,7 @@ pub const CharacterVirtual = opaque {
             args.object_layer_filter,
             args.body_filter,
             args.shape_filter,
-            @as(*c.JPC_TempAllocator, @ptrCast(temp_allocator)),
+            @as(*c.JPC_TempAllocator, @ptrCast(state.?.temp_allocator)),
         );
     }
 
