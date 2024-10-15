@@ -84,6 +84,68 @@ pub const BOX = extern struct {
     back: UINT,
 };
 
+pub const UAV_DIMENSION = enum(UINT) {
+    UNKNOWN = 0,
+    BUFFER = 1,
+    TEXTURE1D = 2,
+    TEXTURE1DARRAY = 3,
+    TEXTURE2D = 4,
+    TEXTURE2DARRAY = 5,
+    TEXTURE3D = 8,
+};
+
+pub const BUFFER_UAV_FLAG = packed struct(UINT) {
+    RAW: bool = false,
+    APPEND: bool = false,
+    COUNTER: bool = false,
+    __unused: u29 = 0,
+};
+
+pub const BUFFER_UAV = extern struct {
+    FirstElement: UINT,
+    NumElements: UINT,
+    Flags: BUFFER_UAV_FLAG,
+};
+
+pub const TEX1D_UAV = extern struct {
+    MipSlice: UINT,
+};
+
+pub const TEX1D_ARRAY_UAV = extern struct {
+    MipSlice: UINT,
+    FirstArraySlice: UINT,
+    ArraySize: UINT,
+};
+
+pub const TEX2D_UAV = extern struct {
+    MipSlice: UINT,
+};
+
+pub const TEX2D_ARRAY_UAV = extern struct {
+    MipSlice: UINT,
+    FirstArraySlice: UINT,
+    ArraySize: UINT,
+};
+
+pub const TEX3D_UAV = extern struct {
+    MipSlice: UINT,
+    FirstWSlice: UINT,
+    WSize: UINT,
+};
+
+pub const UNORDERED_ACCESS_VIEW_DESC = extern struct {
+    Format: dxgi.FORMAT,
+    ViewDimension: UAV_DIMENSION,
+    u: extern union {
+        Buffer: BUFFER_UAV,
+        Texture1D: TEX1D_UAV,
+        Texture1DArray: TEX1D_ARRAY_UAV,
+        Texture2D: TEX2D_UAV,
+        Texture2DArray: TEX2D_ARRAY_UAV,
+        Texture3D: TEX3D_UAV,
+    },
+};
+
 pub const BUFFER_RTV = extern struct {
     u0: extern union {
         FirstElement: UINT,
@@ -920,6 +982,14 @@ pub const IDeviceContext = extern struct {
                     StencilRef,
                 );
             }
+            pub inline fn Dispatch(self: *T, ThreadGroupCountX: UINT, ThreadGroupCountY: UINT, ThreadGroupCountZ: UINT) void {
+                @as(*const IDeviceContext.VTable, @ptrCast(self.__v)).Dispatch(
+                    @as(*IDeviceContext, @ptrCast(self)),
+                    ThreadGroupCountX,
+                    ThreadGroupCountY,
+                    ThreadGroupCountZ,
+                );
+            }
             pub inline fn RSSetState(self: *T, pRasterizerState: ?*IRasterizerState) void {
                 @as(*const IDeviceContext.VTable, @ptrCast(self.__v))
                     .RSSetState(@as(*IDeviceContext, @ptrCast(self)), pRasterizerState);
@@ -957,6 +1027,47 @@ pub const IDeviceContext = extern struct {
             ) void {
                 @as(*const IDeviceContext.VTable, @ptrCast(self.__v))
                     .ClearDepthStencilView(@as(*IDeviceContext, @ptrCast(self)), pDepthStencilView, ClearFlags, Depth, Stencil);
+            }
+            pub inline fn CSSetUnorderedAccessViews(
+                self: *T,
+                StartSlot: UINT,
+                NumUAVs: UINT,
+                ppUnorderedAccessViews: [*]const *IUnorderedAccessView,
+                pUAVInitialCounts: [*]const UINT,
+            ) void {
+                @as(*const IDeviceContext.VTable, @ptrCast(self.__v)).CSSetUnorderedAccessViews(
+                    @as(*IDeviceContext, @ptrCast(self)),
+                    StartSlot,
+                    NumUAVs,
+                    ppUnorderedAccessViews,
+                    pUAVInitialCounts,
+                );
+            }
+            pub inline fn CSSetShader(
+                self: *T,
+                pComputeShader: *IComputeShader,
+                ppClassInstances: ?[*]const *IClassInstance,
+                NumClassInstances: UINT,
+            ) void {
+                @as(*const IDeviceContext.VTable, @ptrCast(self.__v)).CSSetShader(
+                    @as(*IDeviceContext, @ptrCast(self)),
+                    pComputeShader,
+                    ppClassInstances,
+                    NumClassInstances,
+                );
+            }
+            pub inline fn CSSetConstantBuffers(
+                self: *T,
+                StartSlot: UINT,
+                NumBuffers: UINT,
+                ppConstantBuffers: ?[*]const *IBuffer,
+            ) void {
+                @as(*const IDeviceContext.VTable, @ptrCast(self.__v)).CSSetConstantBuffers(
+                    @as(*IDeviceContext, @ptrCast(self)),
+                    StartSlot,
+                    NumBuffers,
+                    ppConstantBuffers,
+                );
             }
             pub inline fn Flush(self: *T) void {
                 @as(*const IDeviceContext.VTable, @ptrCast(self.__v)).Flush(@as(*IDeviceContext, @ptrCast(self)));
@@ -1091,7 +1202,7 @@ pub const IDeviceContext = extern struct {
         DrawAuto: *anyopaque,
         DrawIndexedInstancedIndirect: *anyopaque,
         DrawInstancedIndirect: *anyopaque,
-        Dispatch: *anyopaque,
+        Dispatch: *const fn (*T, UINT, UINT, UINT) callconv(WINAPI) void,
         DispatchIndirect: *anyopaque,
         RSSetState: *const fn (*T, ?*IRasterizerState) callconv(WINAPI) void,
         RSSetViewports: *const fn (*T, UINT, [*]const VIEWPORT) callconv(WINAPI) void,
@@ -1118,10 +1229,26 @@ pub const IDeviceContext = extern struct {
         DSSetSamplers: *anyopaque,
         DSSetConstantBuffers: *anyopaque,
         CSSetShaderResources: *anyopaque,
-        CSSetUnorderedAccessViews: *anyopaque,
-        CSSetShader: *anyopaque,
+        CSSetUnorderedAccessViews: *const fn (
+            *T,
+            UINT,
+            UINT,
+            ?[*]const *IUnorderedAccessView,
+            ?[*]const UINT,
+        ) callconv(WINAPI) void,
+        CSSetShader: *const fn (
+            *T, 
+            ?*IComputeShader, 
+            ?[*]const *IClassInstance, 
+            UINT,
+        ) callconv(WINAPI) void,
         CSSetSamplers: *anyopaque,
-        CSSetConstantBuffers: *anyopaque,
+        CSSetConstantBuffers: *const fn (
+            *T,
+            UINT,
+            UINT,
+            ?[*]const *IBuffer,
+        ) callconv(WINAPI) void,
         VSGetConstantBuffers: *anyopaque,
         PSGetShaderResources: *anyopaque,
         PSGetShader: *anyopaque,
@@ -1217,6 +1344,19 @@ pub const IDevice = extern struct {
                     ppSRView,
                 );
             }
+            pub inline fn CreateUnorderedAccessView(
+                self: *T,
+                pResource: ?*IResource,
+                pDesc: ?*const UNORDERED_ACCESS_VIEW_DESC,
+                ppUAView: ?*?*IUnorderedAccessView,
+            ) HRESULT {
+                return @as(*const IDevice.VTable, @ptrCast(self.__v)).CreateUnorderedAccessView(
+                    @as(*IDevice, @ptrCast(self)),
+                    pResource,
+                    pDesc,
+                    ppUAView,
+                );
+            }
             pub inline fn CreateRenderTargetView(
                 self: *T,
                 pResource: ?*IResource,
@@ -1301,6 +1441,21 @@ pub const IDevice = extern struct {
                     ppPixelShader,
                 );
             }
+            pub inline fn CreateComputeShader(
+                self: *T,
+                pShaderBytecode: *const anyopaque,
+                BytecodeLength: SIZE_T,
+                pClassLinkage: ?*IClassLinkage,
+                ppComputeShader: ?*?*IComputeShader,
+            ) HRESULT {
+                return @as(*const IDevice.VTable, @ptrCast(self.__v)).CreateComputeShader(
+                    @as(*IDevice, @ptrCast(self)),
+                    pShaderBytecode,
+                    BytecodeLength,
+                    pClassLinkage,
+                    ppComputeShader,
+                );
+            }
             pub inline fn CreateBlendState(
                 self: *T,
                 pBlendStateDesc: *const BLEND_DESC,
@@ -1357,7 +1512,12 @@ pub const IDevice = extern struct {
             ?*const SHADER_RESOURCE_VIEW_DESC,
             ?*?*IShaderResourceView,
         ) callconv(WINAPI) HRESULT,
-        CreateUnorderedAccessView: *anyopaque,
+        CreateUnorderedAccessView: *const fn (
+            *T,
+            ?*IResource,
+            ?*const UNORDERED_ACCESS_VIEW_DESC,
+            ?*?*IUnorderedAccessView,
+        ) callconv(WINAPI) HRESULT,
         CreateRenderTargetView: *const fn (
             *T,
             ?*IResource,
@@ -1396,7 +1556,13 @@ pub const IDevice = extern struct {
         ) callconv(WINAPI) HRESULT,
         CreateHullShader: *anyopaque,
         CreateDomainShader: *anyopaque,
-        CreateComputeShader: *anyopaque,
+        CreateComputeShader: *const fn (
+            *T,
+            ?*const anyopaque,
+            SIZE_T,
+            ?*IClassLinkage,
+            ?*?*IComputeShader,
+        ) callconv(WINAPI) HRESULT,
         CreateClassLinkage: *anyopaque,
         CreateBlendState: *const fn (
             *T,
@@ -1455,6 +1621,24 @@ pub const IView = extern struct {
     pub const VTable = extern struct {
         base: IDeviceChild.VTable,
         GetResource: *anyopaque,
+    };
+};
+
+pub const IID_IUnorderedAccessView = GUID.parse("{28acf509-7f5c-48f6-8611-f316010a6380}");
+pub const IUnorderedAccessView = extern struct {
+    __v: *const VTable,
+
+    pub usingnamespace Methods(@This());
+
+    pub fn Methods(comptime T: type) type {
+        return extern struct {
+            pub usingnamespace IView.Methods(T);
+        };
+    }
+
+    pub const VTable = extern struct {
+        base: IView.VTable,
+        GetDesc: *anyopaque,
     };
 };
 
@@ -1550,6 +1734,24 @@ pub const IVertexShader = extern struct {
 
 pub const IID_IPixelShader = GUID.parse("{ea82e40d-51dc-4f33-93d4-db7c9125ae8c}");
 pub const IPixelShader = extern struct {
+    __v: *const VTable,
+
+    pub usingnamespace Methods(@This());
+
+    pub fn Methods(comptime T: type) type {
+        return extern struct {
+            pub usingnamespace IDeviceChild.Methods(T);
+        };
+    }
+
+    pub const VTable = extern struct {
+        base: IDeviceChild.VTable,
+        GetDesc: *anyopaque,
+    };
+};
+
+pub const IID_IComputeShader = GUID.parse("{4f5b196e-c2bd-495e-bd01-1fded38e4969}");
+pub const IComputeShader = extern struct {
     __v: *const VTable,
 
     pub usingnamespace Methods(@This());
