@@ -489,13 +489,25 @@ pub const BLEND_DESC = extern struct {
     RenderTarget: [8]RENDER_TARGET_BLEND_DESC,
 };
 
-pub const TEXTURE2D_DESC = struct {
+pub const TEXTURE2D_DESC = extern struct {
     Width: UINT,
     Height: UINT,
     MipLevels: UINT,
     ArraySize: UINT,
     Format: dxgi.FORMAT,
     SampleDesc: dxgi.SAMPLE_DESC,
+    Usage: USAGE,
+    BindFlags: BIND_FLAG,
+    CPUAccessFlags: CPU_ACCCESS_FLAG,
+    MiscFlags: RESOURCE_MISC_FLAG,
+};
+
+pub const TEXTURE3D_DESC = extern struct {
+    Width: UINT,
+    Height: UINT,
+    Depth: UINT,
+    MipLevels: UINT,
+    Format: dxgi.FORMAT,
     Usage: USAGE,
     BindFlags: BIND_FLAG,
     CPUAccessFlags: CPU_ACCCESS_FLAG,
@@ -1331,6 +1343,19 @@ pub const IDevice = extern struct {
                     ppTexture2D,
                 );
             }
+            pub inline fn CreateTexture3D(
+                self: *T,
+                pDesc: *const TEXTURE3D_DESC,
+                pInitialData: ?*const SUBRESOURCE_DATA,
+                ppTexture3D: ?*?*ITexture3D,
+            ) HRESULT {
+                return @as(*const IDevice.VTable, @ptrCast(self.__v)).CreateTexture3D(
+                    @as(*IDevice, @ptrCast(self)),
+                    pDesc,
+                    pInitialData,
+                    ppTexture3D,
+                );
+            }
             pub inline fn CreateShaderResourceView(
                 self: *T,
                 pResource: *IResource,
@@ -1505,7 +1530,12 @@ pub const IDevice = extern struct {
             ?*const SUBRESOURCE_DATA,
             ?*?*ITexture2D,
         ) callconv(WINAPI) HRESULT,
-        CreateTexture3D: *anyopaque,
+        CreateTexture3D: *const fn (
+            *T,
+            *const TEXTURE3D_DESC,
+            ?*const SUBRESOURCE_DATA,
+            ?*?*ITexture3D,
+        ) callconv(WINAPI) HRESULT,
         CreateShaderResourceView: *const fn (
             *T,
             *IResource,
@@ -1860,6 +1890,24 @@ pub const IBuffer = extern struct {
 
 pub const IID_ITexture2D = GUID.parse("{6f15aaf2-d208-4e89-9ab4-489535d34f9c}");
 pub const ITexture2D = extern struct {
+    __v: *const VTable,
+
+    pub usingnamespace Methods(@This());
+
+    pub fn Methods(comptime T: type) type {
+        return extern struct {
+            pub usingnamespace IResource.Methods(T);
+        };
+    }
+
+    pub const VTable = extern struct {
+        base: IResource.VTable,
+        GetDesc: *anyopaque,
+    };
+};
+
+pub const IID_ITexture3D = GUID.parse("{037e866e-f56d-4357-a8af-9dabbe6e250e}");
+pub const ITexture3D = extern struct {
     __v: *const VTable,
 
     pub usingnamespace Methods(@This());
