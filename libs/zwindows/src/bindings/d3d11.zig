@@ -858,6 +858,32 @@ pub const IDeviceContext = extern struct {
                 @as(*const IDeviceContext.VTable, @ptrCast(self.__v))
                     .DrawInstanced(@as(*IDeviceContext, @ptrCast(self)), VertexCountPerInstance, InstanceCount, StartVertexLocation, StartInstanceLocation);
             }
+            pub inline fn GSSetConstantBuffers(
+                self: *T,
+                StartSlot: UINT,
+                NumBuffers: UINT,
+                ppConstantBuffers: ?[*]const *IBuffer,
+            ) void {
+                @as(*const IDeviceContext.VTable, @ptrCast(self.__v)).GSSetConstantBuffers(
+                    @as(*IDeviceContext, @ptrCast(self)),
+                    StartSlot,
+                    NumBuffers,
+                    ppConstantBuffers,
+                );
+            }
+            pub inline fn GSSetShader(
+                self: *T,
+                pGeometryShader: ?*IGeometryShader,
+                ppClassInstance: ?[*]const *IClassInstance,
+                NumClassInstances: UINT,
+            ) void {
+                @as(*const IDeviceContext.VTable, @ptrCast(self.__v)).GSSetShader(
+                    @as(*IDeviceContext, @ptrCast(self)),
+                    pGeometryShader,
+                    ppClassInstance,
+                    NumClassInstances,
+                );
+            }
             pub inline fn DrawIndexed(
                 self: *T,
                 IndexCount: UINT,
@@ -955,6 +981,32 @@ pub const IDeviceContext = extern struct {
                     StartSlot,
                     NumViews,
                     ppShaderResourceViews,
+                );
+            }
+            pub inline fn GSSetShaderResources(
+                self: *T,
+                StartSlot: UINT,
+                NumViews: UINT,
+                ppShaderResourceViews: ?[*]const *IShaderResourceView,
+            ) void {
+                @as(*const IDeviceContext.VTable, @ptrCast(self.__v)).GSSetShaderResources(
+                    @as(*IDeviceContext, @ptrCast(self)),
+                    StartSlot,
+                    NumViews,
+                    ppShaderResourceViews,
+                );
+            }
+            pub inline fn GSSetSamplers(
+                self: *T,
+                StartSlot: UINT,
+                NumSamplers: UINT,
+                ppSamplers: ?[*]const *ISamplerState,
+            ) void {
+                @as(*const IDeviceContext.VTable, @ptrCast(self.__v)).GSSetSamplers(
+                    @as(*IDeviceContext, @ptrCast(self)),
+                    StartSlot,
+                    NumSamplers,
+                    ppSamplers,
                 );
             }
             pub inline fn OMSetRenderTargets(
@@ -1180,8 +1232,18 @@ pub const IDeviceContext = extern struct {
             UINT,
             UINT
         ) callconv(WINAPI) void,
-        GSSetConstantBuffers: *anyopaque,
-        GSSetShader: *anyopaque,
+        GSSetConstantBuffers: *const fn (
+            *T,
+            UINT,
+            UINT,
+            ?[*]const *IBuffer,
+        ) callconv(WINAPI) void,
+        GSSetShader: *const fn (
+            *T,
+            ?*IGeometryShader,
+            ?[*]const *IClassInstance,
+            UINT,
+        ) callconv(WINAPI) void,
         IASetPrimitiveTopology: *const fn (*T, PRIMITIVE_TOPOLOGY) callconv(WINAPI) void,
         VSSetShaderResources: *const fn (
             *T,
@@ -1194,8 +1256,18 @@ pub const IDeviceContext = extern struct {
         End: *anyopaque,
         GetData: *anyopaque,
         SetPredication: *anyopaque,
-        GSSetShaderResources: *anyopaque,
-        GSSetSamplers: *anyopaque,
+        GSSetShaderResources: *const fn (
+            *T,
+            UINT,
+            UINT,
+            ?[*]const *IShaderResourceView,
+        ) callconv(WINAPI) void,
+        GSSetSamplers: *const fn (
+            *T,
+            UINT,
+            UINT,
+            ?[*]const *ISamplerState,
+        ) callconv(WINAPI) void,
         OMSetRenderTargets: *const fn (
             *T,
             UINT,
@@ -1451,6 +1523,21 @@ pub const IDevice = extern struct {
                     ppVertexShader,
                 );
             }
+            pub inline fn CreateGeometryShader(
+                self: *T,
+                pShaderBytecode: *const anyopaque,
+                BytecodeLength: SIZE_T,
+                pClassLinkage: ?*IClassLinkage,
+                ppGeometryShader: ?*?*IGeometryShader,
+            ) HRESULT {
+                return @as(*const IDevice.VTable, @ptrCast(self.__v)).CreateGeometryShader(
+                    @as(*IDevice, @ptrCast(self)),
+                    pShaderBytecode,
+                    BytecodeLength,
+                    pClassLinkage,
+                    ppGeometryShader,
+                );
+            }
             pub inline fn CreatePixelShader(
                 self: *T,
                 pShaderBytecode: *const anyopaque,
@@ -1575,7 +1662,13 @@ pub const IDevice = extern struct {
             ?*IClassLinkage,
             ?*?*IVertexShader,
         ) callconv(WINAPI) HRESULT,
-        CreateGeometryShader: *anyopaque,
+        CreateGeometryShader: *const fn (
+            *T,
+            ?*const anyopaque,
+            SIZE_T,
+            ?*IClassLinkage,
+            ?*?*IGeometryShader,
+        ) callconv(WINAPI) HRESULT,
         CreateGeometryShaderWithStreamOutput: *anyopaque,
         CreatePixelShader: *const fn (
             *T,
@@ -1764,6 +1857,24 @@ pub const IVertexShader = extern struct {
 
 pub const IID_IPixelShader = GUID.parse("{ea82e40d-51dc-4f33-93d4-db7c9125ae8c}");
 pub const IPixelShader = extern struct {
+    __v: *const VTable,
+
+    pub usingnamespace Methods(@This());
+
+    pub fn Methods(comptime T: type) type {
+        return extern struct {
+            pub usingnamespace IDeviceChild.Methods(T);
+        };
+    }
+
+    pub const VTable = extern struct {
+        base: IDeviceChild.VTable,
+        GetDesc: *anyopaque,
+    };
+};
+
+pub const IID_IGeometryShader = GUID.parse("{38325b96-effb-4022-ba02-2e795b70275c}");
+pub const IGeometryShader = extern struct {
     __v: *const VTable,
 
     pub usingnamespace Methods(@This());
