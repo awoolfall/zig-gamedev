@@ -1133,6 +1133,9 @@ pub const IDeviceContext = extern struct {
                     ppConstantBuffers,
                 );
             }
+            pub inline fn ClearState(self: *T) void {
+                @as(*const IDeviceContext.VTable, @ptrCast(self.__v)).ClearState(@as(*IDeviceContext, @ptrCast(self)));
+            }
             pub inline fn Flush(self: *T) void {
                 @as(*const IDeviceContext.VTable, @ptrCast(self.__v)).Flush(@as(*IDeviceContext, @ptrCast(self)));
             }
@@ -1371,7 +1374,7 @@ pub const IDeviceContext = extern struct {
         CSGetShader: *anyopaque,
         CSGetSamplers: *anyopaque,
         CSGetConstantBuffers: *anyopaque,
-        ClearState: *anyopaque,
+        ClearState: *const fn (*T) callconv(WINAPI) void,
         Flush: *const fn (*T) callconv(WINAPI) void,
         GetType: *anyopaque,
         GetContextFlags: *anyopaque,
