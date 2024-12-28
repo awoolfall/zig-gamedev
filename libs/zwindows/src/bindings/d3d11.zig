@@ -1092,6 +1092,19 @@ pub const IDeviceContext = extern struct {
                 @as(*const IDeviceContext.VTable, @ptrCast(self.__v))
                     .ClearDepthStencilView(@as(*IDeviceContext, @ptrCast(self)), pDepthStencilView, ClearFlags, Depth, Stencil);
             }
+            pub inline fn CSSetShaderResources(
+                self: *T,
+                StartSlot: UINT,
+                NumViews: UINT,
+                ppShaderResourceViews: [*]const *IShaderResourceView,
+            ) void {
+                @as(*const IDeviceContext.VTable, @ptrCast(self.__v)).CSSetShaderResources(
+                    @as(*IDeviceContext, @ptrCast(self)),
+                    StartSlot,
+                    NumViews,
+                    ppShaderResourceViews,
+                );
+            }
             pub inline fn CSSetUnorderedAccessViews(
                 self: *T,
                 StartSlot: UINT,
@@ -1118,6 +1131,19 @@ pub const IDeviceContext = extern struct {
                     pComputeShader,
                     ppClassInstances,
                     NumClassInstances,
+                );
+            }
+            pub inline fn CSSetSamplers(
+                self: *T,
+                StartSlot: UINT,
+                NumSamplers: UINT,
+                ppSamplers: ?[*]const *ISamplerState,
+            ) void {
+                @as(*const IDeviceContext.VTable, @ptrCast(self.__v)).CSSetSamplers(
+                    @as(*IDeviceContext, @ptrCast(self)),
+                    StartSlot,
+                    NumSamplers,
+                    ppSamplers,
                 );
             }
             pub inline fn CSSetConstantBuffers(
@@ -1315,7 +1341,12 @@ pub const IDeviceContext = extern struct {
         DSSetShader: *anyopaque,
         DSSetSamplers: *anyopaque,
         DSSetConstantBuffers: *anyopaque,
-        CSSetShaderResources: *anyopaque,
+        CSSetShaderResources: *const fn (
+            *T,
+            UINT,
+            UINT,
+            ?[*]const *IShaderResourceView,
+        ) callconv(WINAPI) void,
         CSSetUnorderedAccessViews: *const fn (
             *T,
             UINT,
@@ -1329,7 +1360,12 @@ pub const IDeviceContext = extern struct {
             ?[*]const *IClassInstance, 
             UINT,
         ) callconv(WINAPI) void,
-        CSSetSamplers: *anyopaque,
+        CSSetSamplers: *const fn (
+            *T,
+            UINT,
+            UINT,
+            ?[*]const *ISamplerState,
+        ) callconv(WINAPI) void,
         CSSetConstantBuffers: *const fn (
             *T,
             UINT,
